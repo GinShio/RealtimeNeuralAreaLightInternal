@@ -40,5 +40,6 @@
     "Xrandr",
     "Xrender",
     "Zeroable"
-  ]
+  ],
+  "rust-analyzer.cargo.buildScripts.enable": true,
 }
