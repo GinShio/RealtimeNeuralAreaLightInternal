@@ -43,11 +43,26 @@ fn main() {
 
     let shader_dir = PathBuf::from("shaders");
     let entry_shaders = [
-        ("shader.slang", "vert.spv", "vertex", "vsMain"),
-        ("shader.slang", "frag.spv", "fragment", "fsMain"),
-        ("final.slang", "final.spv", "compute", "main"),
-        ("present.slang", "present.vert.spv", "vertex", "vsMain"),
-        ("present.slang", "present.frag.spv", "fragment", "fsMain"),
+        ("scene.slang", "scene.vert.spv", "vertex", "vsMain"),
+        ("scene.slang", "scene.frag.spv", "fragment", "fsMain"),
+        (
+            "tone_mapping.slang",
+            "tone_mapping.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "copy_to_swapchain.slang",
+            "copy_to_swapchain.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "copy_to_swapchain.slang",
+            "copy_to_swapchain.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
     ];
 
     // Watch all .slang files in the shader directory

@@ -1,0 +1,358 @@
+use anyhow::Result;
+use ash::vk;
+use imgui::{Context, DrawData, Ui};
+use winit::window::Window;
+
+mod pass;
+mod render_images;
+mod vulkan_state;
+
+use vulkan_state::VulkanState;
+
+/// renderer struct.
+pub struct Renderer {
+    state: VulkanState,
+
+    render_images: render_images::RenderImages,
+
+    scene_pass: pass::ScenePass,
+    tone_mapping_pass: pass::ToneMappingPass,
+    imgui_pass: pass::ImGuiPass,
+    copy_to_swapchain_pass: pass::CopyToSwapchainPass,
+
+    command_buffers: Vec<vk::CommandBuffer>,
+
+    acquire_next_image_semaphores: Vec<vk::Semaphore>,
+    render_finished_semaphores: Vec<vk::Semaphore>,
+    fences: Vec<vk::Fence>,
+
+    swapchain_suboptimal: bool,
+    current_frame_index: u64,
+}
+impl Renderer {
+    /// Maximum number of frames in flight.
+    const MAX_FRAMES_IN_FLIGHT: usize = 3;
+
+    /// Creates a new instance of the Renderer struct.
+    pub fn new(window: &Window, imgui: &mut Context) -> Result<Self> {
+        let mut state = VulkanState::new(window)?;
+
+        // Create render images
+        let render_images = render_images::RenderImages::new(&mut state)?;
+
+        // Create pass
+        let scene_pass = pass::ScenePass::new(&mut state)?;
+        let tone_mapping_pass = pass::ToneMappingPass::new(&mut state, &render_images)?;
+        let imgui_pass = pass::ImGuiPass::new(&mut state, imgui)?;
+        let copy_to_swapchain_pass = pass::CopyToSwapchainPass::new(&mut state, &render_images)?;
+
+        // Create main command buffers
+        let command_buffers = {
+            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
+                .command_pool(state.command_pool)
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .command_buffer_count(Self::MAX_FRAMES_IN_FLIGHT as u32);
+            unsafe {
+                state
+                    .device
+                    .allocate_command_buffers(&command_buffer_allocate_info)?
+            }
+        };
+
+        // Create synchronization objects
+        let (acquire_next_image_semaphores, render_finished_semaphores, fences) = {
+            (0..Self::MAX_FRAMES_IN_FLIGHT)
+                .map(|_| {
+                    let mut render_finished_semaphore_create_info =
+                        vk::SemaphoreTypeCreateInfo::default();
+                    let create_info = vk::SemaphoreCreateInfo::default()
+                        .push_next(&mut render_finished_semaphore_create_info);
+                    let render_finished_semaphore = unsafe {
+                        state
+                            .device
+                            .create_semaphore(&create_info, None)
+                            .expect("Failed to create timeline semaphore")
+                    };
+
+                    let acquire_next_image_semaphore_create_info =
+                        vk::SemaphoreCreateInfo::default();
+                    let acquire_next_image_semaphore = unsafe {
+                        state
+                            .device
+                            .create_semaphore(&acquire_next_image_semaphore_create_info, None)
+                            .expect("Failed to create present semaphore")
+                    };
+
+                    let fence_create_info =
+                        vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
+                    let fence = unsafe {
+                        state
+                            .device
+                            .create_fence(&fence_create_info, None)
+                            .expect("Failed to create fence")
+                    };
+
+                    (
+                        acquire_next_image_semaphore,
+                        render_finished_semaphore,
+                        fence,
+                    )
+                })
+                .collect::<(Vec<_>, Vec<_>, Vec<_>)>()
+        };
+
+        Ok(Self {
+            state,
+
+            render_images,
+
+            scene_pass,
+            tone_mapping_pass,
+            imgui_pass,
+            copy_to_swapchain_pass,
+
+            command_buffers,
+
+            acquire_next_image_semaphores,
+            render_finished_semaphores,
+            fences,
+
+            swapchain_suboptimal: false,
+
+            current_frame_index: 0,
+        })
+    }
+
+    /// Resizes the swapchain and recreates the render images.
+    pub fn resize(&mut self, width: u32, height: u32) -> Result<()> {
+        unsafe {
+            self.state.device.device_wait_idle()?;
+
+            for image_view in &self.state.swapchain.image_views {
+                self.state.device.destroy_image_view(*image_view, None);
+            }
+            for semaphore in &self.acquire_next_image_semaphores {
+                self.state.device.destroy_semaphore(*semaphore, None);
+            }
+            for semaphore in &self.render_finished_semaphores {
+                self.state.device.destroy_semaphore(*semaphore, None);
+            }
+        }
+
+        // recreate semaphores
+        unsafe {
+            self.acquire_next_image_semaphores = (0..Self::MAX_FRAMES_IN_FLIGHT)
+                .map(|_| {
+                    let create_info = vk::SemaphoreCreateInfo::default();
+                    self.state
+                        .device
+                        .create_semaphore(&create_info, None)
+                        .expect("Failed to create timeline semaphore")
+                })
+                .collect();
+            self.render_finished_semaphores = (0..Self::MAX_FRAMES_IN_FLIGHT)
+                .map(|_| {
+                    let create_info = vk::SemaphoreCreateInfo::default();
+                    self.state
+                        .device
+                        .create_semaphore(&create_info, None)
+                        .expect("Failed to create timeline semaphore")
+                })
+                .collect();
+        }
+
+        // recreate swapchain
+        self.state.recreate_swapchain(width, height)?;
+
+        // recreate render images
+        self.render_images.recreate(&mut self.state)?;
+
+        // update descriptor sets
+        self.tone_mapping_pass
+            .update_render_images(&mut self.state, &self.render_images);
+        self.copy_to_swapchain_pass
+            .update_render_images(&mut self.state, &self.render_images);
+
+        Ok(())
+    }
+
+    /// ImGui UI function.
+    pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32) {
+        self.imgui_pass.ui(ui, hidpi_factor);
+    }
+
+    /// Main render function.
+    pub fn render(&mut self, imgui_draw_data: &DrawData) -> Result<()> {
+        if self.state.swapchain.extent.width == 0 || self.state.swapchain.extent.height == 0 {
+            std::thread::sleep(std::time::Duration::from_millis(16));
+            return Ok(());
+        }
+
+        if self.swapchain_suboptimal {
+            self.resize(
+                self.state.swapchain.extent.width,
+                self.state.swapchain.extent.height,
+            )?;
+            self.swapchain_suboptimal = false;
+            return Ok(());
+        }
+
+        let in_flight_index =
+            (self.current_frame_index % Self::MAX_FRAMES_IN_FLIGHT as u64) as usize;
+
+        // Wait and reset fences
+        unsafe {
+            self.state
+                .device
+                .wait_for_fences(&[self.fences[in_flight_index]], true, u64::MAX)?;
+            self.state
+                .device
+                .reset_fences(&[self.fences[in_flight_index]])?;
+        }
+
+        // Acquire next image
+        let acquire_info = vk::AcquireNextImageInfoKHR::default()
+            .swapchain(self.state.swapchain.swapchain)
+            .timeout(1_000_000_000)
+            .semaphore(self.acquire_next_image_semaphores[in_flight_index])
+            .device_mask(1);
+        let image_index =
+            match unsafe { self.state.swapchain_fn.acquire_next_image2(&acquire_info) } {
+                Ok((index, sub_optimal)) => {
+                    if sub_optimal {
+                        println!("Swapchain suboptimal");
+                        self.swapchain_suboptimal = true;
+                    }
+                    index
+                }
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    println!("Swapchain out of date");
+                    self.resize(
+                        self.state.swapchain.extent.width,
+                        self.state.swapchain.extent.height,
+                    )?;
+                    return Ok(());
+                }
+                Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
+                    println!("Surface lost");
+                    self.resize(
+                        self.state.swapchain.extent.width,
+                        self.state.swapchain.extent.height,
+                    )?;
+                    return Ok(());
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            };
+
+        let image_index = image_index as usize;
+
+        // Begin command buffer
+        let command_buffer = self.command_buffers[in_flight_index];
+        let begin_info = vk::CommandBufferBeginInfo::default();
+        unsafe {
+            self.state
+                .device
+                .begin_command_buffer(command_buffer, &begin_info)?;
+        }
+
+        // Record passes
+        self.scene_pass.cmd_draw(
+            &self.state,
+            command_buffer,
+            image_index,
+            &self.render_images,
+        );
+        self.tone_mapping_pass.cmd_draw(
+            &self.state,
+            command_buffer,
+            image_index,
+            &self.render_images,
+        );
+        self.imgui_pass.cmd_draw(
+            &self.state,
+            command_buffer,
+            image_index,
+            &self.render_images,
+            imgui_draw_data,
+        );
+        self.copy_to_swapchain_pass.cmd_draw(
+            &self.state,
+            command_buffer,
+            image_index,
+            &self.render_images,
+        );
+
+        // End command buffer
+        unsafe { self.state.device.end_command_buffer(command_buffer)? };
+
+        // Submit command buffer
+        let command_buffer_infos =
+            [vk::CommandBufferSubmitInfo::default().command_buffer(command_buffer)];
+        let wait_semaphore_infos = [vk::SemaphoreSubmitInfo::default()
+            .semaphore(self.acquire_next_image_semaphores[in_flight_index])
+            .stage_mask(vk::PipelineStageFlags2KHR::COLOR_ATTACHMENT_OUTPUT)];
+        let signal_semaphore_infos = [vk::SemaphoreSubmitInfo::default()
+            .semaphore(self.render_finished_semaphores[in_flight_index])
+            .stage_mask(vk::PipelineStageFlags2KHR::BOTTOM_OF_PIPE)];
+        let submit_info = vk::SubmitInfo2::default()
+            .command_buffer_infos(&command_buffer_infos)
+            .wait_semaphore_infos(&wait_semaphore_infos)
+            .signal_semaphore_infos(&signal_semaphore_infos);
+        unsafe {
+            self.state.device.queue_submit2(
+                self.state.queue,
+                &[submit_info],
+                self.fences[in_flight_index],
+            )?;
+        }
+
+        // Present
+        let swapchains = [self.state.swapchain.swapchain];
+        let image_indices = [image_index as u32];
+        let wait_semaphores = [self.render_finished_semaphores[in_flight_index]];
+        let present_info = vk::PresentInfoKHR::default()
+            .swapchains(&swapchains)
+            .image_indices(&image_indices)
+            .wait_semaphores(&wait_semaphores);
+        unsafe {
+            self.state
+                .swapchain_fn
+                .queue_present(self.state.queue, &present_info)?;
+        }
+
+        // Update current frame index
+        self.current_frame_index =
+            (self.current_frame_index + 1) % Self::MAX_FRAMES_IN_FLIGHT as u64;
+
+        Ok(())
+    }
+}
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        unsafe {
+            self.state
+                .device
+                .device_wait_idle()
+                .expect("Failed to wait for state.device idle");
+
+            self.copy_to_swapchain_pass.destroy(&mut self.state);
+            self.imgui_pass.destroy();
+            self.tone_mapping_pass.destroy(&mut self.state);
+            self.scene_pass.destroy(&mut self.state).unwrap();
+
+            self.render_images.destroy(&mut self.state);
+
+            for i in 0..Self::MAX_FRAMES_IN_FLIGHT {
+                self.state
+                    .device
+                    .destroy_semaphore(self.acquire_next_image_semaphores[i], None);
+                self.state
+                    .device
+                    .destroy_semaphore(self.render_finished_semaphores[i], None);
+                self.state.device.destroy_fence(self.fences[i], None);
+            }
+        }
+    }
+}
