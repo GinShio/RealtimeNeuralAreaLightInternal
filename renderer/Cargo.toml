@@ -13,6 +13,12 @@ ash = "0.38.0"
 ash-window = "0.13.0"
 bytemuck = { version = "1.23.0", features = ["derive"] }
 gpu-allocator = "0.27.0"
+imgui = "0.12.0"
+imgui-rs-vulkan-renderer = { version = "1.16.0", features = [
+  "dynamic-rendering",
+  "gpu-allocator",
+] }
+imgui-winit-support = "0.13.0"
 winit = "0.30.10"
 
 

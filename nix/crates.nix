@@ -6,8 +6,8 @@ let
     "${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d";
   nvidiaIcdFile =
     "/run/opengl-driver/share/vulkan/icd.d/nvidia_icd.x86_64.json";
-  libraryPath =
-    pkgs.lib.makeLibraryPath (with pkgs; [ libxkbcommon mesa vulkan-loader ]);
+  libraryPath = pkgs.lib.makeLibraryPath
+    (with pkgs; [ libxkbcommon mesa vulkan-loader stdenv.cc.cc ]);
 
   # Wrap the Vulkan environment variables around the binary
   wrapWithVulkanEnv = binaryPath: ''
@@ -36,7 +36,7 @@ let
     strictDeps = true;
     buildInputs = vulkanPackages ++ x11Packages;
     nativeBuildInputs = with pkgs;
-      [ mold clang makeWrapper ] ++ slangc ++ x11Packages;
+      [ mold clang makeWrapper stdenv ] ++ slangc ++ x11Packages;
     preBuild = "ulimit -s unlimited";
   };
 

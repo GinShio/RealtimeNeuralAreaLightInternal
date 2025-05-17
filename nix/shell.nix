@@ -5,12 +5,12 @@ let
     "${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d";
   nvidiaIcdFile =
     "/run/opengl-driver/share/vulkan/icd.d/nvidia_icd.x86_64.json";
-  libraryPath =
-    pkgs.lib.makeLibraryPath (with pkgs; [ libxkbcommon mesa vulkan-loader ]);
+  libraryPath = pkgs.lib.makeLibraryPath
+    (with pkgs; [ libxkbcommon mesa vulkan-loader stdenv.cc.cc ]);
 in {
   devShell = craneLib.devShell {
     buildInputs = with pkgs;
-      [ mold clang ] ++ slangc ++ vulkanPackages ++ x11Packages;
+      [ mold clang stdenv ] ++ slangc ++ vulkanPackages ++ x11Packages;
 
     # use x11 instead of wayland
     shellHook = "unset WAYLAND_DISPLAY";

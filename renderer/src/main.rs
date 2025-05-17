@@ -1,5 +1,6 @@
 use std::ffi::{CStr, CString, c_void};
-use std::mem::ManuallyDrop;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use anyhow::Result;
 #[cfg(feature = "validation-enabled")]
@@ -13,9 +14,16 @@ use gpu_allocator::{
     MemoryLocation,
     vulkan::{Allocation, AllocationCreateDesc, AllocationScheme, Allocator, AllocatorCreateDesc},
 };
+use imgui::{Condition, Context, DrawData, Ui};
+use imgui_rs_vulkan_renderer::{
+    DynamicRendering as ImguiDynamicRendering, Options as ImguiOptions, Renderer as ImguiRenderer,
+};
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
+use winit::dpi::PhysicalSize;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
+    event::{DeviceEvent, DeviceId, Event, StartCause},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     window::{Window, WindowId},
@@ -106,7 +114,7 @@ struct Renderer {
     device: Device,
     swapchain_fn: swapchain::Device,
 
-    allocator: ManuallyDrop<Allocator>,
+    allocator: Option<Arc<Mutex<Allocator>>>,
 
     graphics_queue: vk::Queue,
     swapchain: Swapchain,
@@ -128,11 +136,17 @@ struct Renderer {
     swapchain_suboptimal: bool,
 
     current_frame_index: u64,
+
+    // imgui
+    imgui_renderer: Option<ImguiRenderer>,
+    notify_text: &'static str,
 }
 impl Renderer {
     const MAX_FRAMES_IN_FLIGHT: usize = 3;
+    const WINDOW_WIDTH: u32 = 1280;
+    const WINDOW_HEIGHT: u32 = 720;
 
-    fn new(window: &Window) -> Result<Self> {
+    fn new(window: &Window, imgui: &mut Context) -> Result<Self> {
         // Load Vulkan library from the system
         let entry = unsafe { Entry::load()? };
 
@@ -679,6 +693,25 @@ impl Renderer {
                 .collect::<(Vec<_>, Vec<_>, Vec<_>)>()
         };
 
+        // setup imgui
+        let allocator = Arc::new(Mutex::new(allocator));
+        let imgui_renderer = ImguiRenderer::with_gpu_allocator(
+            allocator.clone(),
+            device.clone(),
+            graphics_queue,
+            graphics_command_pool,
+            ImguiDynamicRendering {
+                color_attachment_format: swapchain.format,
+                depth_attachment_format: None,
+            },
+            imgui,
+            Some(ImguiOptions {
+                in_flight_frames: Self::MAX_FRAMES_IN_FLIGHT,
+                ..Default::default()
+            }),
+        )
+        .expect("Failed to create imgui renderer");
+
         Ok(Self {
             entry,
 
@@ -695,7 +728,7 @@ impl Renderer {
             device,
             swapchain_fn,
 
-            allocator: ManuallyDrop::new(allocator),
+            allocator: Some(allocator),
 
             graphics_queue,
             swapchain,
@@ -717,6 +750,9 @@ impl Renderer {
             swapchain_suboptimal: false,
 
             current_frame_index: 0,
+
+            imgui_renderer: Some(imgui_renderer),
+            notify_text: "",
         })
     }
 
@@ -823,7 +859,58 @@ impl Renderer {
         Ok(())
     }
 
-    fn render(&mut self) -> Result<()> {
+    fn ui(&mut self, ui: &Ui, hidpi_factor: f32) {
+        let width = 300.0;
+        let height = 200.0;
+        let w = ui
+            .window("ImGui Color Button Example")
+            .size([width, height], Condition::Appearing)
+            .position(
+                [
+                    Self::WINDOW_WIDTH as f32 / hidpi_factor - width - 20.0,
+                    20.0,
+                ],
+                Condition::Appearing,
+            );
+        w.build(|| {
+            ui.text_wrapped(
+                "Color button is a widget that displays a color value as a clickable rectangle. \
+             It also supports a tooltip with detailed information about the color value. \
+             Try hovering over and clicking these buttons!",
+            );
+            ui.text(self.notify_text);
+
+            ui.text("This button is black:");
+            if ui.color_button("Black color", [0.0, 0.0, 0.0, 1.0]) {
+                self.notify_text = "*** Black button was clicked";
+            }
+
+            ui.text("This button is red:");
+            if ui.color_button("Red color", [1.0, 0.0, 0.0, 1.0]) {
+                self.notify_text = "*** Red button was clicked";
+            }
+
+            ui.text("This button is BIG because it has a custom size:");
+            if ui
+                .color_button_config("Green color", [0.0, 1.0, 0.0, 1.0])
+                .size([100.0, 50.0])
+                .build()
+            {
+                self.notify_text = "*** BIG button was clicked";
+            }
+
+            ui.text("This button doesn't use the tooltip at all:");
+            if ui
+                .color_button_config("No tooltip", [0.0, 0.0, 1.0, 1.0])
+                .tooltip(false)
+                .build()
+            {
+                self.notify_text = "*** No tooltip button was clicked";
+            }
+        });
+    }
+
+    fn render(&mut self, imgui_draw_data: &DrawData) -> Result<()> {
         if self.swapchain.extent.width == 0 || self.swapchain.extent.height == 0 {
             std::thread::sleep(std::time::Duration::from_millis(16));
             return Ok(());
@@ -970,6 +1057,12 @@ impl Renderer {
                 .cmd_draw(command_buffer, self.vertices.len() as u32, 1, 0, 0);
         }
 
+        // Draw imgui
+        self.imgui_renderer
+            .as_mut()
+            .unwrap()
+            .cmd_draw(command_buffer, imgui_draw_data)?;
+
         // End rendering
         unsafe {
             self.device.cmd_end_rendering(command_buffer);
@@ -1049,6 +1142,9 @@ impl Drop for Renderer {
                 .device_wait_idle()
                 .expect("Failed to wait for device idle");
 
+            let imgui_renderer = self.imgui_renderer.take().unwrap();
+            drop(imgui_renderer);
+
             for i in 0..Self::MAX_FRAMES_IN_FLIGHT {
                 self.device
                     .destroy_semaphore(self.acquire_next_image_semaphores[i], None);
@@ -1056,7 +1152,11 @@ impl Drop for Renderer {
                     .destroy_semaphore(self.render_finished_semaphores[i], None);
                 self.device.destroy_fence(self.fences[i], None);
             }
-            self.allocator
+            let mut allocator = Arc::try_unwrap(self.allocator.take().unwrap())
+                .unwrap()
+                .into_inner()
+                .unwrap();
+            allocator
                 .free(self.vertex_buffer_allocation.take().unwrap())
                 .expect("Failed to free vertex buffer allocation");
             self.device.destroy_buffer(self.vertex_buffer, None);
@@ -1070,7 +1170,7 @@ impl Drop for Renderer {
             }
             self.swapchain_fn
                 .destroy_swapchain(self.swapchain.swapchain, None);
-            ManuallyDrop::drop(&mut self.allocator);
+            drop(allocator);
             self.device.destroy_device(None);
             self.surface_fn.destroy_surface(self.surface, None);
             #[cfg(feature = "validation-enabled")]
@@ -1086,12 +1186,20 @@ impl Drop for Renderer {
 struct App {
     window: Option<Window>,
     renderer: Option<Renderer>,
+    imgui: Context,
+    platform: WinitPlatform,
+    latest_frame: Instant,
 }
 impl App {
     fn new() -> Result<Self> {
+        let mut imgui = Context::create();
+        let platform = WinitPlatform::new(&mut imgui);
         Ok(Self {
             window: None,
             renderer: None,
+            imgui,
+            platform,
+            latest_frame: Instant::now(),
         })
     }
 }
@@ -1099,16 +1207,55 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let attr = Window::default_attributes()
             .with_title("Vulkan: Slang test")
-            .with_resizable(false);
+            .with_resizable(false)
+            .with_inner_size(PhysicalSize::new(
+                Renderer::WINDOW_WIDTH,
+                Renderer::WINDOW_HEIGHT,
+            ));
         let window = event_loop
             .create_window(attr)
             .expect("Failed to create window");
-        self.renderer = Some(Renderer::new(&window).expect("Failed to create renderer"));
+        self.platform
+            .attach_window(self.imgui.io_mut(), &window, HiDpiMode::Default);
+        self.renderer =
+            Some(Renderer::new(&window, &mut self.imgui).expect("Failed to create renderer"));
         self.window = Some(window);
+        self.window.as_ref().unwrap().request_redraw();
+        self.latest_frame = Instant::now();
+    }
+
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
+        let now = Instant::now();
+        self.imgui
+            .io_mut()
+            .update_delta_time(now - self.latest_frame);
+        self.latest_frame = now;
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        self.platform
+            .prepare_frame(self.imgui.io_mut(), self.window.as_ref().unwrap())
+            .expect("Failed to prepare frame");
         self.window.as_ref().unwrap().request_redraw();
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        let event = Event::<()>::DeviceEvent { device_id, event };
+        self.platform
+            .handle_event(self.imgui.io_mut(), self.window.as_ref().unwrap(), &event);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -1122,13 +1269,31 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(renderer) = &mut self.renderer {
-                    renderer.render().expect("Failed to render");
+                    // Generate imgui
+                    self.platform
+                        .prepare_frame(self.imgui.io_mut(), &self.window.as_ref().unwrap())
+                        .expect("Failed to prepare frame");
+                    let ui = self.imgui.frame();
+                    renderer.ui(&ui, self.platform.hidpi_factor() as f32);
+                    self.platform
+                        .prepare_render(&ui, &self.window.as_ref().unwrap());
+                    let imgui_draw_data = self.imgui.render();
+
+                    // render
+                    renderer.render(imgui_draw_data).expect("Failed to render");
                 }
                 if let Some(window) = &self.window {
                     window.request_redraw();
                 }
             }
-            _ => {}
+            event => {
+                let event = Event::<()>::WindowEvent { window_id, event };
+                self.platform.handle_event(
+                    self.imgui.io_mut(),
+                    &self.window.as_ref().unwrap(),
+                    &event,
+                );
+            }
         }
     }
 }
