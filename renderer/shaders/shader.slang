@@ -11,12 +11,12 @@ struct VertexOutput
 }
 
 [shader("vertex")]
-func vsMain(VertexInput input)->VertexOutput
+func vsMain(input: VertexInput)->VertexOutput
 {
-    VertexOutput output;
-    output.position = float4(input.position, 0.0, 1.0);
-    output.color = input.color;
-    return output;
+    return {
+        { input.position, 0.0, 1.0 },
+        input.color,
+    };
 }
 
 struct FragmentOutput
@@ -25,9 +25,9 @@ struct FragmentOutput
 }
 
 [shader("fragment")]
-func fsMain(VertexOutput input)->FragmentOutput
+func fsMain(input: VertexOutput)->FragmentOutput
 {
-    FragmentOutput output;
-    output.color = float4(input.color, 1.0);
-    return output;
+    return {
+        { input.color, 1.0 },
+    };
 }

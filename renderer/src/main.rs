@@ -420,7 +420,7 @@ impl Renderer {
                 // Create scene image
                 let image_create_info = vk::ImageCreateInfo::default()
                     .image_type(vk::ImageType::TYPE_2D)
-                    .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE)
+                    .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED)
                     .format(vk::Format::R8G8B8A8_UNORM)
                     .mip_levels(1)
                     .array_layers(1)
@@ -489,7 +489,7 @@ impl Renderer {
                     .dst_stage_mask(vk::PipelineStageFlags2KHR::ALL_COMMANDS)
                     .dst_access_mask(vk::AccessFlags2KHR::NONE)
                     .old_layout(vk::ImageLayout::UNDEFINED)
-                    .new_layout(vk::ImageLayout::GENERAL)
+                    .new_layout(vk::ImageLayout::READ_ONLY_OPTIMAL)
                     .subresource_range(vk::ImageSubresourceRange {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
                         base_mip_level: 0,
@@ -786,7 +786,7 @@ impl Renderer {
             let bindings = [
                 vk::DescriptorSetLayoutBinding::default()
                     .binding(0)
-                    .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                    .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
                     .descriptor_count(1)
                     .stage_flags(vk::ShaderStageFlags::COMPUTE),
                 vk::DescriptorSetLayoutBinding::default()
@@ -807,7 +807,7 @@ impl Renderer {
         let final_pass_descriptor_pool = {
             let descriptor_pool_size = [
                 vk::DescriptorPoolSize::default()
-                    .ty(vk::DescriptorType::STORAGE_IMAGE)
+                    .ty(vk::DescriptorType::SAMPLED_IMAGE)
                     .descriptor_count(1),
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::STORAGE_IMAGE)
@@ -843,14 +843,14 @@ impl Renderer {
         for i in 0..Self::MAX_FRAMES_IN_FLIGHT {
             let input_image_info = [vk::DescriptorImageInfo::default()
                 .image_view(scene_image_views[i])
-                .image_layout(vk::ImageLayout::GENERAL)];
+                .image_layout(vk::ImageLayout::READ_ONLY_OPTIMAL)];
             let output_image_info = [vk::DescriptorImageInfo::default()
                 .image_view(final_image_views[i])
                 .image_layout(vk::ImageLayout::GENERAL)];
             let write_descriptor_sets = [
                 vk::WriteDescriptorSet::default()
                     .dst_set(final_pass_descriptor_sets[i])
-                    .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                    .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
                     .dst_binding(0)
                     .image_info(&input_image_info),
                 vk::WriteDescriptorSet::default()
@@ -1583,13 +1583,13 @@ impl Renderer {
         // === main pass ===
 
         // Memory barrier
-        // - scene_images[image_index] General -> ColorAttachmentOptimal
+        // - scene_images[image_index] ReadOnlyOptimal -> ColorAttachmentOptimal
         let image_memory_barriers = [vk::ImageMemoryBarrier2::default()
             .src_stage_mask(vk::PipelineStageFlags2KHR::TOP_OF_PIPE)
             .src_access_mask(vk::AccessFlags2KHR::NONE)
             .dst_stage_mask(vk::PipelineStageFlags2KHR::COLOR_ATTACHMENT_OUTPUT)
             .dst_access_mask(vk::AccessFlags2KHR::COLOR_ATTACHMENT_WRITE)
-            .old_layout(vk::ImageLayout::GENERAL)
+            .old_layout(vk::ImageLayout::READ_ONLY_OPTIMAL)
             .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .image(self.scene_images[image_index])
             .subresource_range(vk::ImageSubresourceRange {
@@ -1677,7 +1677,7 @@ impl Renderer {
         // === final pass ===
 
         // Memory barrier
-        // - scene_images[image_index] ColorAttachmentOptimal -> General
+        // - scene_images[image_index] ColorAttachmentOptimal -> ReadOnlyOptimal
         // - final_images[image_index] ShaderReadOnlyOptimal -> General
         let image_memory_barriers = [
             vk::ImageMemoryBarrier2::default()
@@ -1686,7 +1686,7 @@ impl Renderer {
                 .dst_stage_mask(vk::PipelineStageFlags2KHR::COMPUTE_SHADER)
                 .dst_access_mask(vk::AccessFlags2KHR::SHADER_READ)
                 .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .new_layout(vk::ImageLayout::GENERAL)
+                .new_layout(vk::ImageLayout::READ_ONLY_OPTIMAL)
                 .image(self.scene_images[image_index])
                 .subresource_range(vk::ImageSubresourceRange {
                     aspect_mask: vk::ImageAspectFlags::COLOR,

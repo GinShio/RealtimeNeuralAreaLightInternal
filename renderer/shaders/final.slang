@@ -1,5 +1,5 @@
 [[vk::binding(0)]]
-RWTexture2D<float4> inputTexture;
+Texture2D<float4> inputTexture;
 [[vk::binding(1)]]
 RWTexture2D<float4> outputTexture;
 
@@ -11,10 +11,15 @@ func linearToSRGB(color: float3) -> float3
     return select(useLinear, v1, v2);
 }
 
+struct ComputeInput
+{
+    uint3 dispatchThreadID : SV_DispatchThreadID;
+};
+
 [shader("compute")]
 [numthreads(8,8,1)]
-func main(uint3 dispatchThreadID: SV_DispatchThreadID) -> void {
-    let xy = int2(dispatchThreadID.xy);
+func main(input: ComputeInput) -> void {
+    let xy = int2(input.dispatchThreadID.xy);
 
     int width, height;
     inputTexture.GetDimensions(width, height);
@@ -22,7 +27,8 @@ func main(uint3 dispatchThreadID: SV_DispatchThreadID) -> void {
     if (xy.x >= width || xy.y >= height) {
         return;
     }
-    let color = inputTexture.Load(xy).rgb;
+
+    let color = inputTexture.Load({xy, 0}).rgb;
     let srgbColor = linearToSRGB(color);
-    outputTexture[xy] = float4(srgbColor, 1.0);
+    outputTexture[xy] = { srgbColor, 1.0 };
 }
