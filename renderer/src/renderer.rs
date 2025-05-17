@@ -28,6 +28,10 @@ pub struct Renderer {
 
     swapchain_suboptimal: bool,
     current_frame_index: u64,
+
+    // imgui ui data
+    fill: bool,
+    fill_color: glam::Vec3,
 }
 impl Renderer {
     /// Maximum number of frames in flight.
@@ -120,6 +124,9 @@ impl Renderer {
             swapchain_suboptimal: false,
 
             current_frame_index: 0,
+
+            fill: false,
+            fill_color: glam::Vec3::ZERO,
         })
     }
 
@@ -178,7 +185,8 @@ impl Renderer {
 
     /// ImGui UI function.
     pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32) {
-        self.imgui_pass.ui(ui, hidpi_factor);
+        self.imgui_pass
+            .ui(ui, hidpi_factor, &mut self.fill, &mut self.fill_color);
     }
 
     /// Main render function.
@@ -263,6 +271,8 @@ impl Renderer {
             command_buffer,
             image_index,
             &self.render_images,
+            self.fill,
+            self.fill_color,
         );
         self.tone_mapping_pass.cmd_draw(
             &self.state,

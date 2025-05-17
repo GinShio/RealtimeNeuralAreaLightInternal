@@ -10,7 +10,7 @@ struct VertexOutput
 }
 
 [shader("vertex")]
-func vsMain(input: VertexInput)->VertexOutput
+func vsMain(input: VertexInput) -> VertexOutput
 {
     float2 positions[] = {
       {-1.0, -1.0},
@@ -39,7 +39,7 @@ struct FragmentOutput
 }
 
 [shader("fragment")]
-func fsMain(input: VertexOutput )->FragmentOutput
+func fsMain(input: VertexOutput ) -> FragmentOutput
 {
   return {
     inputImage.Sample(input.uv)

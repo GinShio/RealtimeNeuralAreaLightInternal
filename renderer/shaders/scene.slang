@@ -1,3 +1,11 @@
+struct PushConstants {
+    bool fill;
+    float3 fillColor;
+}
+
+[[push_constant]]
+PushConstants pc;
+
 struct VertexInput
 {
     float2 position;
@@ -10,13 +18,28 @@ struct VertexOutput
     float3 color : TEXCOORD0;
 }
 
-[shader("vertex")]
-func vsMain(input: VertexInput)->VertexOutput
+func srgbToLinear(color: float3) -> float3
 {
-    return {
-        { input.position, 0.0, 1.0 },
-        input.color,
-    };
+    let useLinear = color <= 0.04045;
+    let v1 = color / 12.92;
+    let v2 = pow((color + 0.055) / 1.055, 2.4);
+    return select(useLinear, v1, v2);
+}
+
+[shader("vertex")]
+func vsMain(input: VertexInput) -> VertexOutput
+{
+    if (pc.fill) {
+        return {
+            { input.position, 0.0, 1.0 },
+            srgbToLinear(pc.fillColor),
+        };
+    } else {
+        return {
+            { input.position, 0.0, 1.0 },
+            srgbToLinear(input.color),
+        };
+    }
 }
 
 struct FragmentOutput
@@ -25,7 +48,7 @@ struct FragmentOutput
 }
 
 [shader("fragment")]
-func fsMain(input: VertexOutput)->FragmentOutput
+func fsMain(input: VertexOutput) -> FragmentOutput
 {
     return {
         { input.color, 1.0 },

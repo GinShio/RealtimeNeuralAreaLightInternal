@@ -10,7 +10,6 @@ use crate::renderer::{Renderer, render_images::RenderImages, vulkan_state::Vulka
 /// A struct that represents the imgui pass.
 pub struct ImGuiPass {
     imgui_renderer: Option<ImguiRenderer>,
-    notify_text: &'static str,
 }
 impl ImGuiPass {
     /// Creates a new instance of the ImGuiPass struct.
@@ -31,18 +30,15 @@ impl ImGuiPass {
             }),
         )?;
 
-        let notify_text = "Hello from ImGui!";
-
         Ok(Self {
             imgui_renderer: Some(imgui_renderer),
-            notify_text,
         })
     }
 
     /// ImGui UI function.
-    pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32) {
-        let width = 300.0;
-        let height = 200.0;
+    pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32, fill: &mut bool, fill_color: &mut glam::Vec3) {
+        let width = 250.0;
+        let height = 300.0;
         let w = ui
             .window("ImGui Color Button Example")
             .size([width, height], Condition::Appearing)
@@ -51,40 +47,11 @@ impl ImGuiPass {
                 Condition::Appearing,
             );
         w.build(|| {
-            ui.text_wrapped(
-                "Color button is a widget that displays a color value as a clickable rectangle. \
-             It also supports a tooltip with detailed information about the color value. \
-             Try hovering over and clicking these buttons!",
-            );
-            ui.text(self.notify_text);
+            ui.text_wrapped("Triangle Color.");
+            ui.separator();
 
-            ui.text("This button is black:");
-            if ui.color_button("Black color", [0.0, 0.0, 0.0, 1.0]) {
-                self.notify_text = "*** Black button was clicked";
-            }
-
-            ui.text("This button is red:");
-            if ui.color_button("Red color", [1.0, 0.0, 0.0, 1.0]) {
-                self.notify_text = "*** Red button was clicked";
-            }
-
-            ui.text("This button is BIG because it has a custom size:");
-            if ui
-                .color_button_config("Green color", [0.0, 1.0, 0.0, 1.0])
-                .size([100.0, 50.0])
-                .build()
-            {
-                self.notify_text = "*** BIG button was clicked";
-            }
-
-            ui.text("This button doesn't use the tooltip at all:");
-            if ui
-                .color_button_config("No tooltip", [0.0, 0.0, 1.0, 1.0])
-                .tooltip(false)
-                .build()
-            {
-                self.notify_text = "*** No tooltip button was clicked";
-            }
+            ui.checkbox("fill", fill);
+            ui.color_picker3("fill color", fill_color);
         });
     }
 

@@ -2,6 +2,7 @@ use std::ffi::CString;
 
 use anyhow::Result;
 use ash::vk;
+use crevice::std140::AsStd140;
 use gpu_allocator::{
     MemoryLocation,
     vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
@@ -42,6 +43,13 @@ impl Vertex {
             },
         ]
     }
+}
+
+#[repr(C)]
+#[derive(AsStd140)]
+struct PushConstants {
+    fill: u32,
+    fill_color: glam::Vec3,
 }
 
 /// A struct that represents the scene pass.
@@ -140,8 +148,13 @@ impl ScenePass {
                 .color_attachment_formats(&rendering_formats);
 
             // Create pipeline layout
-            let pipeline_layout_create_info =
-                vk::PipelineLayoutCreateInfo::default().set_layouts(&[]);
+            let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default()
+                .set_layouts(&[])
+                .push_constant_ranges(&[vk::PushConstantRange {
+                    stage_flags: vk::ShaderStageFlags::VERTEX,
+                    offset: 0,
+                    size: std::mem::size_of::<Std140PushConstants>() as u32,
+                }]);
             let pipeline_layout = unsafe {
                 state
                     .device
@@ -346,6 +359,8 @@ impl ScenePass {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         render_images: &RenderImages,
+        fill: bool,
+        fill_color: glam::Vec3,
     ) {
         // Memory barrier
         // - linear_scene_images[image_index] ReadOnlyOptimal -> ColorAttachmentOptimal
@@ -430,6 +445,21 @@ impl ScenePass {
             state
                 .device
                 .cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+        }
+
+        // Push constants
+        let push_constants = PushConstants {
+            fill: if fill { 1 } else { 0 },
+            fill_color,
+        };
+        unsafe {
+            state.device.cmd_push_constants(
+                command_buffer,
+                self.pipeline_layout,
+                vk::ShaderStageFlags::VERTEX,
+                0,
+                push_constants.as_std140().as_bytes(),
+            );
         }
 
         // Draw
