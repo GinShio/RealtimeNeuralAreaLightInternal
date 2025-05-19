@@ -1,0 +1,52 @@
+use ash::vk;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    pub pos: [f32; 3],
+    pub normal: [f32; 3],
+    pub tangent: [f32; 4],
+    pub uv: [f32; 2],
+}
+impl Vertex {
+    pub fn get_binding_descriptions() -> [vk::VertexInputBindingDescription; 1] {
+        [vk::VertexInputBindingDescription {
+            binding: 0,
+            stride: std::mem::size_of::<Self>() as u32,
+            input_rate: vk::VertexInputRate::VERTEX,
+        }]
+    }
+
+    pub fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
+        [
+            // position
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 0,
+                format: vk::Format::R32G32_SFLOAT,
+                offset: std::mem::offset_of!(Self, pos) as u32,
+            },
+            // normal
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 1,
+                format: vk::Format::R32G32B32_SFLOAT,
+                offset: std::mem::offset_of!(Self, normal) as u32,
+            },
+            // tangent
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 2,
+                format: vk::Format::R32G32B32A32_SFLOAT,
+                offset: std::mem::offset_of!(Self, tangent) as u32,
+            },
+            // uv
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 3,
+                format: vk::Format::R32G32_SFLOAT,
+                offset: std::mem::offset_of!(Self, uv) as u32,
+            },
+        ]
+    }
+}

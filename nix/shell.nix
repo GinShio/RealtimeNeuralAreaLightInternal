@@ -1,4 +1,4 @@
-{ pkgs, craneLib, slangc, x11Packages, vulkanPackages }:
+{ pkgs, craneLib, slangc, waylandPackages, vulkanPackages }:
 let
   # vulkan env vars
   vulkanLayerPath =
@@ -6,14 +6,11 @@ let
   nvidiaIcdFile =
     "/run/opengl-driver/share/vulkan/icd.d/nvidia_icd.x86_64.json";
   libraryPath = pkgs.lib.makeLibraryPath
-    (with pkgs; [ libxkbcommon mesa vulkan-loader stdenv.cc.cc ]);
+    (with pkgs; [ libxkbcommon mesa vulkan-loader stdenv.cc.cc wayland ]);
 in {
   devShell = craneLib.devShell {
     buildInputs = with pkgs;
-      [ mold clang stdenv ] ++ slangc ++ vulkanPackages ++ x11Packages;
-
-    # use x11 instead of wayland
-    shellHook = "unset WAYLAND_DISPLAY";
+      [ mold clang stdenv ] ++ slangc ++ vulkanPackages ++ waylandPackages;
 
     # set the Vulkan environment variables
     env = {

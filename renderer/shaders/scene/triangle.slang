@@ -8,14 +8,18 @@ PushConstants pc;
 
 struct VertexInput
 {
-    float2 position;
+    float3 position;
     float3 color;
+    float4 tangent;
+    float2 uv;
 }
 
 struct VertexOutput
 {
     float4 position : SV_POSITION;
-    float3 color : TEXCOORD0;
+    float3 color : COLOR;
+    float4 tangent : TANGENT;
+    float2 uv : TEXCOORD;
 }
 
 func srgbToLinear(color: float3) -> float3
@@ -31,13 +35,17 @@ func vsMain(input: VertexInput) -> VertexOutput
 {
     if (pc.fill) {
         return {
-            { input.position, 0.0, 1.0 },
+            { input.position, 1.0 },
             srgbToLinear(pc.fillColor),
+            input.tangent,
+            input.uv,
         };
     } else {
         return {
-            { input.position, 0.0, 1.0 },
+            { input.position, 1.0 },
             srgbToLinear(input.color),
+            input.tangent,
+            input.uv,
         };
     }
 }

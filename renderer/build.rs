@@ -43,8 +43,30 @@ fn main() {
 
     let shader_dir = PathBuf::from("shaders");
     let entry_shaders = [
-        ("scene.slang", "scene.vert.spv", "vertex", "vsMain"),
-        ("scene.slang", "scene.frag.spv", "fragment", "fsMain"),
+        (
+            "scene/triangle.slang",
+            "scene/triangle.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/triangle.slang",
+            "scene/triangle.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
+        (
+            "scene/damaged_helmet.slang",
+            "scene/damaged_helmet.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/damaged_helmet.slang",
+            "scene/damaged_helmet.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
         (
             "tone_mapping.slang",
             "tone_mapping.comp.spv",
@@ -72,7 +94,8 @@ fn main() {
     for (entry_file, output, stage, entry_function) in &entry_shaders {
         let src_path = shader_dir.join(entry_file);
         let out_path = out_dir.join(output);
-
+        let out_dir = out_path.parent().unwrap();
+        fs::create_dir_all(out_dir).unwrap();
         compile_slang_shader(&src_path, &out_path, stage, entry_function);
     }
 }

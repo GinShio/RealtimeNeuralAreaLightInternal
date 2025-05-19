@@ -16,8 +16,8 @@ use crate::renderer::Renderer;
 
 /// A struct that implements ApplicationHandler.
 pub struct App {
-    window: Option<Window>,
     renderer: Option<Renderer>,
+    window: Option<Window>,
     imgui: Context,
     platform: WinitPlatform,
     latest_frame: Instant,
@@ -39,8 +39,9 @@ impl App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let attr = Window::default_attributes()
-            .with_title("Vulkan: Slang test")
+            .with_title("Vulkan: Test")
             .with_resizable(false)
+            .with_decorations(false)
             .with_inner_size(PhysicalSize::new(1280, 720));
         let window = event_loop
             .create_window(attr)

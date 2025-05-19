@@ -1,4 +1,4 @@
-{ lib, pkgs, craneLib, slangc, x11Packages, vulkanPackages }:
+{ lib, pkgs, craneLib, slangc, waylandPackages, vulkanPackages }:
 let
   # === vulkan env wrapper ===
   # Vulkan env vars
@@ -7,7 +7,7 @@ let
   nvidiaIcdFile =
     "/run/opengl-driver/share/vulkan/icd.d/nvidia_icd.x86_64.json";
   libraryPath = pkgs.lib.makeLibraryPath
-    (with pkgs; [ libxkbcommon mesa vulkan-loader stdenv.cc.cc ]);
+    (with pkgs; [ libxkbcommon mesa vulkan-loader stdenv.cc.cc wayland ]);
 
   # Wrap the Vulkan environment variables around the binary
   wrapWithVulkanEnv = binaryPath: ''
@@ -15,8 +15,7 @@ let
       --prefix LD_LIBRARY_PATH : ${libraryPath} \
       --set-default VK_ICD_FILENAMES ${nvidiaIcdFile} \
       --set VK_LAYER_PATH ${vulkanLayerPath} \
-      --set RUST_BACKTRACE 1 \
-      --run 'unset WAYLAND_DISPLAY;'
+      --set RUST_BACKTRACE 1
   '';
 
   # === common cargo args ===
@@ -34,9 +33,9 @@ let
   commonArgs = {
     inherit src;
     strictDeps = true;
-    buildInputs = vulkanPackages ++ x11Packages;
+    buildInputs = vulkanPackages ++ waylandPackages;
     nativeBuildInputs = with pkgs;
-      [ mold clang makeWrapper stdenv ] ++ slangc ++ x11Packages;
+      [ mold clang makeWrapper stdenv ] ++ slangc ++ waylandPackages;
     preBuild = "ulimit -s unlimited";
   };
 

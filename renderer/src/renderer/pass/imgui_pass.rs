@@ -5,7 +5,9 @@ use imgui_rs_vulkan_renderer::{
     DynamicRendering as ImguiDynamicRendering, Options as ImguiOptions, Renderer as ImguiRenderer,
 };
 
-use crate::renderer::{Renderer, render_images::RenderImages, vulkan_state::VulkanState};
+use crate::renderer::{
+    Renderer, render_images::RenderImages, scene::Scene, vulkan_state::VulkanState,
+};
 
 /// A struct that represents the imgui pass.
 pub struct ImGuiPass {
@@ -36,22 +38,36 @@ impl ImGuiPass {
     }
 
     /// ImGui UI function.
-    pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32, fill: &mut bool, fill_color: &mut glam::Vec3) {
+    pub fn ui(
+        &mut self,
+        ui: &Ui,
+        hidpi_factor: f32,
+        scene_index: &mut usize,
+        scenes: &mut Vec<Box<dyn Scene>>,
+    ) {
         let width = 250.0;
         let height = 300.0;
+        let scene_names = scenes.iter().map(|s| s.scene_name()).collect::<Vec<_>>();
+        let current_scene = &mut scenes[*scene_index];
+
         let w = ui
-            .window("ImGui Color Button Example")
+            .window("Scene Settings")
             .size([width, height], Condition::Appearing)
             .position(
                 [1280.0 / hidpi_factor - width - 20.0, 20.0],
                 Condition::Appearing,
             );
-        w.build(|| {
-            ui.text_wrapped("Triangle Color.");
-            ui.separator();
 
-            ui.checkbox("fill", fill);
-            ui.color_picker3("fill color", fill_color);
+        w.build(|| {
+            ui.combo_simple_string("Scene", scene_index, &scene_names);
+
+            ui.spacing();
+            ui.spacing();
+            ui.separator();
+            ui.spacing();
+            ui.spacing();
+
+            current_scene.ui(ui);
         });
     }
 

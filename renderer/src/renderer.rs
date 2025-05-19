@@ -3,8 +3,12 @@ use ash::vk;
 use imgui::{Context, DrawData, Ui};
 use winit::window::Window;
 
+mod model_data;
 mod pass;
 mod render_images;
+mod scene;
+mod utils;
+mod vertex;
 mod vulkan_state;
 
 use vulkan_state::VulkanState;
@@ -14,6 +18,8 @@ pub struct Renderer {
     state: VulkanState,
 
     render_images: render_images::RenderImages,
+
+    scenes: Vec<Box<dyn scene::Scene>>,
 
     scene_pass: pass::ScenePass,
     tone_mapping_pass: pass::ToneMappingPass,
@@ -29,9 +35,7 @@ pub struct Renderer {
     swapchain_suboptimal: bool,
     current_frame_index: u64,
 
-    // imgui ui data
-    fill: bool,
-    fill_color: glam::Vec3,
+    current_scene_index: usize,
 }
 impl Renderer {
     /// Maximum number of frames in flight.
@@ -44,8 +48,14 @@ impl Renderer {
         // Create render images
         let render_images = render_images::RenderImages::new(&mut state)?;
 
+        // Create Scenes
+        let scenes: Vec<Box<dyn scene::Scene>> = vec![
+            scene::TriangleScene::new(&mut state)?,
+            scene::DamagedHelmetScene::new(&mut state)?,
+        ];
+
         // Create pass
-        let scene_pass = pass::ScenePass::new(&mut state)?;
+        let scene_pass = pass::ScenePass::new();
         let tone_mapping_pass = pass::ToneMappingPass::new(&mut state, &render_images)?;
         let imgui_pass = pass::ImGuiPass::new(&mut state, imgui)?;
         let copy_to_swapchain_pass = pass::CopyToSwapchainPass::new(&mut state, &render_images)?;
@@ -110,6 +120,8 @@ impl Renderer {
 
             render_images,
 
+            scenes,
+
             scene_pass,
             tone_mapping_pass,
             imgui_pass,
@@ -122,11 +134,9 @@ impl Renderer {
             fences,
 
             swapchain_suboptimal: false,
-
             current_frame_index: 0,
 
-            fill: false,
-            fill_color: glam::Vec3::ZERO,
+            current_scene_index: 0,
         })
     }
 
@@ -185,8 +195,12 @@ impl Renderer {
 
     /// ImGui UI function.
     pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32) {
-        self.imgui_pass
-            .ui(ui, hidpi_factor, &mut self.fill, &mut self.fill_color);
+        self.imgui_pass.ui(
+            ui,
+            hidpi_factor,
+            &mut self.current_scene_index,
+            &mut self.scenes,
+        );
     }
 
     /// Main render function.
@@ -228,7 +242,6 @@ impl Renderer {
             match unsafe { self.state.swapchain_fn.acquire_next_image2(&acquire_info) } {
                 Ok((index, sub_optimal)) => {
                     if sub_optimal {
-                        println!("Swapchain suboptimal");
                         self.swapchain_suboptimal = true;
                     }
                     index
@@ -265,14 +278,16 @@ impl Renderer {
                 .begin_command_buffer(command_buffer, &begin_info)?;
         }
 
+        // Select scene
+        let scene = &mut self.scenes[self.current_scene_index];
+
         // Record passes
         self.scene_pass.cmd_draw(
             &self.state,
             command_buffer,
             image_index,
             &self.render_images,
-            self.fill,
-            self.fill_color,
+            scene,
         );
         self.tone_mapping_pass.cmd_draw(
             &self.state,
@@ -350,7 +365,11 @@ impl Drop for Renderer {
             self.copy_to_swapchain_pass.destroy(&mut self.state);
             self.imgui_pass.destroy();
             self.tone_mapping_pass.destroy(&mut self.state);
-            self.scene_pass.destroy(&mut self.state).unwrap();
+            self.scene_pass.destroy();
+
+            for scene in &mut self.scenes {
+                scene.destroy(&mut self.state);
+            }
 
             self.render_images.destroy(&mut self.state);
 
