@@ -2,7 +2,10 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::renderer::{
-    model_data::ModelData, render_images::RenderImages, scene::Scene, utils,
+    model_data::{ModelData, load_glb},
+    render_images::RenderImages,
+    scene::Scene,
+    utils,
     vulkan_state::VulkanState,
 };
 
@@ -47,7 +50,7 @@ impl DamagedHelmetScene {
         };
 
         // Load model data
-        let model_data = utils::load_glb(state, "./assets/DamagedHelmet.glb")?;
+        let model_data = load_glb(state, "./assets/DamagedHelmet.glb")?;
 
         Ok(Box::new(Self {
             pipeline_layout,
