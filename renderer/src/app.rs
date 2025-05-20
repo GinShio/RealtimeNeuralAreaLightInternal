@@ -102,12 +102,12 @@ impl ApplicationHandler for App {
                 if let Some(renderer) = &mut self.renderer {
                     // Generate imgui
                     self.platform
-                        .prepare_frame(self.imgui.io_mut(), &self.window.as_ref().unwrap())
+                        .prepare_frame(self.imgui.io_mut(), self.window.as_ref().unwrap())
                         .expect("Failed to prepare frame");
                     let ui = self.imgui.frame();
-                    renderer.ui(&ui, self.platform.hidpi_factor() as f32);
+                    renderer.ui(ui, self.platform.hidpi_factor() as f32);
                     self.platform
-                        .prepare_render(&ui, &self.window.as_ref().unwrap());
+                        .prepare_render(ui, self.window.as_ref().unwrap());
                     let imgui_draw_data = self.imgui.render();
 
                     // render
@@ -121,7 +121,7 @@ impl ApplicationHandler for App {
                 let event = Event::<()>::WindowEvent { window_id, event };
                 self.platform.handle_event(
                     self.imgui.io_mut(),
-                    &self.window.as_ref().unwrap(),
+                    self.window.as_ref().unwrap(),
                     &event,
                 );
             }

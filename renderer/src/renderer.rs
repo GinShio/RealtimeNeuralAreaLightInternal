@@ -56,9 +56,9 @@ impl Renderer {
 
         // Create pass
         let scene_pass = pass::ScenePass::new();
-        let tone_mapping_pass = pass::ToneMappingPass::new(&mut state, &render_images)?;
-        let imgui_pass = pass::ImGuiPass::new(&mut state, imgui)?;
-        let copy_to_swapchain_pass = pass::CopyToSwapchainPass::new(&mut state, &render_images)?;
+        let tone_mapping_pass = pass::ToneMappingPass::new(&state, &render_images)?;
+        let imgui_pass = pass::ImGuiPass::new(&state, imgui)?;
+        let copy_to_swapchain_pass = pass::CopyToSwapchainPass::new(&state, &render_images)?;
 
         // Create main command buffers
         let command_buffers = {
@@ -186,9 +186,9 @@ impl Renderer {
 
         // update descriptor sets
         self.tone_mapping_pass
-            .update_render_images(&mut self.state, &self.render_images);
+            .update_render_images(&self.state, &self.render_images);
         self.copy_to_swapchain_pass
-            .update_render_images(&mut self.state, &self.render_images);
+            .update_render_images(&self.state, &self.render_images);
 
         Ok(())
     }
@@ -362,9 +362,9 @@ impl Drop for Renderer {
                 .device_wait_idle()
                 .expect("Failed to wait for state.device idle");
 
-            self.copy_to_swapchain_pass.destroy(&mut self.state);
+            self.copy_to_swapchain_pass.destroy(&self.state);
             self.imgui_pass.destroy();
-            self.tone_mapping_pass.destroy(&mut self.state);
+            self.tone_mapping_pass.destroy(&self.state);
             self.scene_pass.destroy();
 
             for scene in &mut self.scenes {
