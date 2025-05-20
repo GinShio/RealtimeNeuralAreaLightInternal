@@ -18,7 +18,7 @@ impl ModelData {
     pub fn new(state: &mut VulkanState, vertices: &[Vertex], indices: &[u32]) -> Result<Self> {
         // Create vertex buffer
         let (vertex_buffer, vertex_buffer_allocation) = {
-            let buffer_size = (std::mem::size_of::<Vertex>() * vertices.len()) as u64;
+            let buffer_size = std::mem::size_of_val(vertices) as u64;
 
             // create staging buffer
             let staging_buffer_create_info = vk::BufferCreateInfo::default()
@@ -58,7 +58,7 @@ impl ModelData {
                 .ok_or_else(|| {
                     panic!("Failed to map staging buffer memory");
                 })?;
-            data.copy_from_slice(bytemuck::cast_slice(&vertices));
+            data.copy_from_slice(bytemuck::cast_slice(vertices));
 
             // Create vertex buffer
             let buffer_create_info = vk::BufferCreateInfo::default()
@@ -150,7 +150,7 @@ impl ModelData {
 
         // create index buffer
         let (index_buffer, index_buffer_allocation) = {
-            let buffer_size = (std::mem::size_of::<u32>() * indices.len()) as u64;
+            let buffer_size = std::mem::size_of_val(indices) as u64;
 
             // create staging buffer
             let staging_buffer_create_info = vk::BufferCreateInfo::default()
@@ -190,7 +190,7 @@ impl ModelData {
                 .ok_or_else(|| {
                     panic!("Failed to map staging buffer memory");
                 })?;
-            data.copy_from_slice(bytemuck::cast_slice(&indices));
+            data.copy_from_slice(bytemuck::cast_slice(indices));
 
             // Create index buffer
             let buffer_create_info = vk::BufferCreateInfo::default()

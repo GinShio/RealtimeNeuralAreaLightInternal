@@ -127,7 +127,7 @@ impl VulkanState {
                 .collect::<Vec<_>>();
 
             // Required layers
-            let required_layers = vec![
+            let required_layers = [
                 #[cfg(feature = "validation-enabled")]
                 CString::new("VK_LAYER_KHRONOS_validation")?,
             ];
@@ -204,11 +204,7 @@ impl VulkanState {
                     .map(|(i, _)| i)
                     .next();
 
-                if let Some(index) = family_index {
-                    Some((device, index))
-                } else {
-                    None
-                }
+                family_index.map(|index| (device, index))
             });
 
             if let Some((device, index)) = physical_device {
