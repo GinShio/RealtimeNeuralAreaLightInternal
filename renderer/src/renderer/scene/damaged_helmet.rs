@@ -106,13 +106,26 @@ impl Scene for DamagedHelmetScene {
                     float32: [0.1, 0.2, 0.3, 1.0],
                 },
             })];
+        let depth_attachment = vk::RenderingAttachmentInfo::default()
+            .image_view(render_images.depth_scene_image_views[image_index])
+            .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .resolve_mode(vk::ResolveModeFlagsKHR::NONE)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .clear_value(vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            });
         let rendering_info = vk::RenderingInfo::default()
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D::default(),
                 extent: state.swapchain.extent,
             })
             .layer_count(1)
-            .color_attachments(&color_attachments);
+            .color_attachments(&color_attachments)
+            .depth_attachment(&depth_attachment);
         unsafe {
             state
                 .device

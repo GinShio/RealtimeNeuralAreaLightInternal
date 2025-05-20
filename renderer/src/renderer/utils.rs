@@ -88,10 +88,21 @@ pub fn create_graphics_pipeline(
         .logic_op_enable(false)
         .attachments(&color_blend_attachment_states);
 
+    // Create depth stencil state create info
+    let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::default()
+        .depth_test_enable(true)
+        .depth_write_enable(true)
+        .depth_compare_op(vk::CompareOp::LESS)
+        .depth_bounds_test_enable(false)
+        .stencil_test_enable(false)
+        .min_depth_bounds(0.0)
+        .max_depth_bounds(1.0);
+
     // Create pipeline rendering create info
     let rendering_formats = [vk::Format::R8G8B8A8_UNORM];
-    let mut pipeline_rendering =
-        vk::PipelineRenderingCreateInfo::default().color_attachment_formats(&rendering_formats);
+    let mut pipeline_rendering = vk::PipelineRenderingCreateInfo::default()
+        .color_attachment_formats(&rendering_formats)
+        .depth_attachment_format(vk::Format::D24_UNORM_S8_UINT);
 
     // Create pipeline layout
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default()
@@ -112,6 +123,7 @@ pub fn create_graphics_pipeline(
         .rasterization_state(&rasterization_state)
         .multisample_state(&multisample_state)
         .color_blend_state(&color_blend_state)
+        .depth_stencil_state(&depth_stencil_state)
         .dynamic_state(&dynamic_state)
         .push_next(&mut pipeline_rendering)
         .layout(pipeline_layout);
