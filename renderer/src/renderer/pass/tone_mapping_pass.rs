@@ -77,7 +77,7 @@ impl ToneMappingPass {
             descriptor_sets
         };
         // Update descriptor sets
-        for i in 0..Renderer::MAX_FRAMES_IN_FLIGHT {
+        for (i, descriptor_set) in descriptor_sets.iter().enumerate() {
             let input_image_info = [vk::DescriptorImageInfo::default()
                 .image_view(render_images.linear_scene_image_views[i])
                 .image_layout(vk::ImageLayout::READ_ONLY_OPTIMAL)];
@@ -91,7 +91,7 @@ impl ToneMappingPass {
                     .dst_binding(0)
                     .image_info(&input_image_info),
                 vk::WriteDescriptorSet::default()
-                    .dst_set(descriptor_sets[i])
+                    .dst_set(*descriptor_set)
                     .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
                     .dst_binding(1)
                     .image_info(&output_image_info),
@@ -265,8 +265,8 @@ impl ToneMappingPass {
         }
 
         // Dispatch compute shader
-        let x = (state.swapchain.extent.width + 7) / 8;
-        let y = (state.swapchain.extent.height + 7) / 8;
+        let x = state.swapchain.extent.width.div_ceil(8);
+        let y = state.swapchain.extent.height.div_ceil(8);
         unsafe {
             state.device.cmd_dispatch(command_buffer, x, y, 1);
         }

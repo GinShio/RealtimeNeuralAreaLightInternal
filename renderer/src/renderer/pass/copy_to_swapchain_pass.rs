@@ -75,13 +75,13 @@ impl CopyToSwapchainPass {
             descriptor_sets
         };
         // Update descriptor sets
-        for i in 0..Renderer::MAX_FRAMES_IN_FLIGHT {
+        for (i, descriptor_set) in descriptor_sets.iter().enumerate() {
             let input_image_info = [vk::DescriptorImageInfo::default()
                 .image_view(render_images.after_tone_mapping_image_views[i])
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .sampler(sampler)];
             let write_descriptor_sets = [vk::WriteDescriptorSet::default()
-                .dst_set(descriptor_sets[i])
+                .dst_set(*descriptor_set)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .dst_binding(0)
                 .image_info(&input_image_info)];
