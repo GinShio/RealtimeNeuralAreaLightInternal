@@ -1,6 +1,5 @@
 use anyhow::Result;
 use ash::vk;
-use crevice::std140::AsStd140;
 use gpu_allocator::{
     MemoryLocation,
     vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
@@ -11,10 +10,11 @@ use crate::renderer::{
 };
 
 #[repr(C)]
-#[derive(AsStd140)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct PushConstants {
     fill: u32,
-    fill_color: glam::Vec3,
+    _padding: [u32; 3],
+    fill_color: [f32; 3],
 }
 
 pub struct TriangleScene {
@@ -25,7 +25,7 @@ pub struct TriangleScene {
     vertex_buffer_allocation: Option<Allocation>,
 
     fill: bool,
-    fill_color: glam::Vec3,
+    fill_color: [f32; 3],
 }
 impl TriangleScene {
     pub fn new(state: &mut VulkanState) -> Result<Box<Self>> {
@@ -38,7 +38,7 @@ impl TriangleScene {
                 &[vk::PushConstantRange {
                     stage_flags: vk::ShaderStageFlags::VERTEX,
                     offset: 0,
-                    size: std::mem::size_of::<Std140PushConstants>() as u32,
+                    size: std::mem::size_of::<PushConstants>() as u32,
                 }],
             )?
         };
@@ -203,7 +203,7 @@ impl TriangleScene {
             vertex_buffer_allocation: Some(vertex_buffer_allocation),
 
             fill: false,
-            fill_color: glam::Vec3::new(1.0, 1.0, 1.0),
+            fill_color: [1.0; 3],
         }))
     }
 }
@@ -301,6 +301,7 @@ impl Scene for TriangleScene {
         // Push constants
         let push_constants = PushConstants {
             fill: if self.fill { 1 } else { 0 },
+            _padding: [0; 3],
             fill_color: self.fill_color,
         };
         unsafe {
@@ -309,7 +310,7 @@ impl Scene for TriangleScene {
                 self.pipeline_layout,
                 vk::ShaderStageFlags::VERTEX,
                 0,
-                push_constants.as_std140().as_bytes(),
+                bytemuck::bytes_of(&push_constants),
             );
         }
 

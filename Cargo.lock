@@ -357,29 +357,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crevice"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90133334859a096164c9ed6d899b0dc6dffbe0abca9662dea9c76d79c55cd356"
-dependencies = [
- "bytemuck",
- "crevice-derive",
- "glam",
- "mint",
-]
-
-[[package]]
-name = "crevice-derive"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "669025c5d21a002274fa2a547be9da319ae8e678cf99a7e242ae5c785bcd6fa8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "crossbeam-utils"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -507,9 +484,6 @@ name = "glam"
 version = "0.30.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b46b9ca4690308844c644e7c634d68792467260e051c8543e0c7871662b3ba7"
-dependencies = [
- "mint",
-]
 
 [[package]]
 name = "gltf"
@@ -1274,7 +1248,6 @@ dependencies = [
  "ash",
  "ash-window",
  "bytemuck",
- "crevice",
  "glam",
  "gltf",
  "gpu-allocator",

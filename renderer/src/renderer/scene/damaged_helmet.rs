@@ -1,6 +1,5 @@
 use anyhow::Result;
 use ash::vk;
-use crevice::std140::AsStd140;
 
 use crate::renderer::{
     model_data::ModelData, render_images::RenderImages, scene::Scene, utils,
@@ -8,11 +7,11 @@ use crate::renderer::{
 };
 
 #[repr(C)]
-#[derive(AsStd140)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct PushConstants {
-    model: glam::Mat4,
-    view: glam::Mat4,
-    projection: glam::Mat4,
+    model: [f32; 16],
+    view: [f32; 16],
+    projection: [f32; 16],
 }
 
 pub struct DamagedHelmetScene {
@@ -42,7 +41,7 @@ impl DamagedHelmetScene {
                 &[vk::PushConstantRange {
                     stage_flags: vk::ShaderStageFlags::VERTEX,
                     offset: 0,
-                    size: std::mem::size_of::<Std140PushConstants>() as u32,
+                    size: std::mem::size_of::<PushConstants>() as u32,
                 }],
             )?
         };
@@ -200,9 +199,9 @@ impl Scene for DamagedHelmetScene {
                 100.0,
             );
             let push_constants = PushConstants {
-                model,
-                view,
-                projection,
+                model: model.to_cols_array(),
+                view: view.to_cols_array(),
+                projection: projection.to_cols_array(),
             };
             unsafe {
                 state.device.cmd_push_constants(
@@ -210,7 +209,7 @@ impl Scene for DamagedHelmetScene {
                     self.pipeline_layout,
                     vk::ShaderStageFlags::VERTEX,
                     0,
-                    push_constants.as_std140().as_bytes(),
+                    bytemuck::bytes_of(&push_constants),
                 );
             }
 
