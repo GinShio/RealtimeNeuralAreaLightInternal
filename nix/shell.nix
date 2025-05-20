@@ -1,4 +1,4 @@
-{ pkgs, craneLib, slangc, waylandPackages, vulkanPackages }:
+{ pkgs, craneLib, slangc, waylandPackages, x11Packages, vulkanPackages }:
 let
   # vulkan env vars
   vulkanLayerPath =
@@ -10,7 +10,8 @@ let
 in {
   devShell = craneLib.devShell {
     buildInputs = with pkgs;
-      [ mold clang stdenv ] ++ slangc ++ vulkanPackages ++ waylandPackages;
+      [ mold clang stdenv ] ++ slangc ++ vulkanPackages ++ waylandPackages
+      ++ x11Packages;
 
     # set the Vulkan environment variables
     env = {

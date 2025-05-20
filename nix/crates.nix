@@ -1,4 +1,4 @@
-{ lib, pkgs, craneLib, slangc, waylandPackages, vulkanPackages }:
+{ lib, pkgs, craneLib, slangc, waylandPackages, x11Packages, vulkanPackages }:
 let
   # === vulkan env wrapper ===
   # Vulkan env vars
@@ -33,9 +33,10 @@ let
   commonArgs = {
     inherit src;
     strictDeps = true;
-    buildInputs = vulkanPackages ++ waylandPackages;
+    buildInputs = vulkanPackages ++ waylandPackages ++ x11Packages;
     nativeBuildInputs = with pkgs;
-      [ mold clang makeWrapper stdenv ] ++ slangc ++ waylandPackages;
+      [ mold clang makeWrapper stdenv ] ++ slangc ++ waylandPackages
+      ++ x11Packages;
     preBuild = "ulimit -s unlimited";
   };
 
