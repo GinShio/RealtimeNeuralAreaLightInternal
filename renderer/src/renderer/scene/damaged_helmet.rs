@@ -2,9 +2,11 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::renderer::{
-    model_data::{ModelData, load_glb},
+    gltf_loader::{GltfTextures, load_glb},
+    model_data::ModelData,
     render_images::RenderImages,
     scene::Scene,
+    texture_manager::{SamplerIndex, TextureIndex, TextureManager},
     utils,
     vulkan_state::VulkanState,
 };
@@ -15,24 +17,30 @@ struct PushConstants {
     model: [f32; 16],
     view: [f32; 16],
     projection: [f32; 16],
+    sampler: SamplerIndex,
+    base_color: TextureIndex,
+    normal: TextureIndex,
+    metallic_roughness: TextureIndex,
 }
 
 pub struct DamagedHelmetScene {
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 
-    model_data: Vec<ModelData>,
+    sampler: SamplerIndex,
+    model_data: Vec<(ModelData, GltfTextures)>,
 
     rotate: [f32; 3],
     camera_distance: f32,
     camera_rotate: [f32; 2],
 }
 impl DamagedHelmetScene {
-    pub fn new(state: &mut VulkanState) -> Result<Box<Self>> {
+    pub fn new(state: &mut VulkanState, texture_manager: &mut TextureManager) -> Result<Box<Self>> {
         // Create graphics pipeline
         let (pipeline_layout, pipeline) = {
             utils::create_graphics_pipeline(
                 state,
+                texture_manager,
                 include_bytes!(concat!(
                     env!("OUT_DIR"),
                     "/shaders/scene/damaged_helmet.vert.spv"
@@ -42,20 +50,29 @@ impl DamagedHelmetScene {
                     "/shaders/scene/damaged_helmet.frag.spv"
                 )),
                 &[vk::PushConstantRange {
-                    stage_flags: vk::ShaderStageFlags::VERTEX,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                     offset: 0,
                     size: std::mem::size_of::<PushConstants>() as u32,
                 }],
             )?
         };
 
+        // Create sampler
+        let sampler = texture_manager.create_sampler(
+            state,
+            &vk::SamplerCreateInfo::default()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR),
+        )?;
+
         // Load model data
-        let model_data = load_glb(state, "./assets/DamagedHelmet.glb")?;
+        let model_data = load_glb(state, texture_manager, "./assets/DamagedHelmet.glb")?;
 
         Ok(Box::new(Self {
             pipeline_layout,
             pipeline,
 
+            sampler,
             model_data,
 
             rotate: [0.0; 3],
@@ -92,6 +109,7 @@ impl Scene for DamagedHelmetScene {
     fn cmd_draw(
         &mut self,
         state: &VulkanState,
+        texture_manager: &TextureManager,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         render_images: &RenderImages,
@@ -143,6 +161,19 @@ impl Scene for DamagedHelmetScene {
             );
         }
 
+        // Bind descriptor sets
+        let descriptor_sets = texture_manager.descriptor_sets();
+        unsafe {
+            state.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout,
+                0,
+                &descriptor_sets,
+                &[],
+            );
+        }
+
         // Set viewport and scissor
         let viewport = vk::Viewport::default()
             .x(0.0)
@@ -161,7 +192,7 @@ impl Scene for DamagedHelmetScene {
             state.device.cmd_set_scissor(command_buffer, 0, &[scissor]);
         }
 
-        for data in &self.model_data {
+        for (data, texture) in &self.model_data {
             // Bind vertex buffer
             let vertex_buffers = [data.vertex_buffer];
             let offsets = [0];
@@ -205,12 +236,18 @@ impl Scene for DamagedHelmetScene {
                 model: model.to_cols_array(),
                 view: view.to_cols_array(),
                 projection: projection.to_cols_array(),
+                sampler: self.sampler,
+                base_color: texture.base_color.unwrap_or(TextureIndex::invalid()),
+                normal: texture.normal.unwrap_or(TextureIndex::invalid()),
+                metallic_roughness: texture
+                    .metallic_roughness
+                    .unwrap_or(TextureIndex::invalid()),
             };
             unsafe {
                 state.device.cmd_push_constants(
                     command_buffer,
                     self.pipeline_layout,
-                    vk::ShaderStageFlags::VERTEX,
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                     0,
                     bytemuck::bytes_of(&push_constants),
                 );
@@ -231,7 +268,7 @@ impl Scene for DamagedHelmetScene {
     }
 
     fn destroy(&mut self, state: &mut VulkanState) {
-        for data in &mut self.model_data {
+        for (data, _) in &mut self.model_data {
             data.destroy(state);
         }
         unsafe {

@@ -3,10 +3,12 @@ use ash::vk;
 use imgui::{Context, DrawData, Ui};
 use winit::window::Window;
 
+mod gltf_loader;
 mod model_data;
 mod pass;
 mod render_images;
 mod scene;
+mod texture_manager;
 mod utils;
 mod vertex;
 mod vulkan_state;
@@ -18,6 +20,8 @@ pub struct Renderer {
     state: VulkanState,
 
     render_images: render_images::RenderImages,
+
+    texture_manager: texture_manager::TextureManager,
 
     scenes: Vec<Box<dyn scene::Scene>>,
 
@@ -48,10 +52,13 @@ impl Renderer {
         // Create render images
         let render_images = render_images::RenderImages::new(&mut state)?;
 
+        // Create texture manager
+        let mut texture_manager = texture_manager::TextureManager::new(&mut state)?;
+
         // Create Scenes
         let scenes: Vec<Box<dyn scene::Scene>> = vec![
-            scene::TriangleScene::new(&mut state)?,
-            scene::DamagedHelmetScene::new(&mut state)?,
+            scene::TriangleScene::new(&mut state, &mut texture_manager)?,
+            scene::DamagedHelmetScene::new(&mut state, &mut texture_manager)?,
         ];
 
         // Create pass
@@ -119,6 +126,8 @@ impl Renderer {
             state,
 
             render_images,
+
+            texture_manager,
 
             scenes,
 
@@ -284,6 +293,7 @@ impl Renderer {
         // Record passes
         self.scene_pass.cmd_draw(
             &self.state,
+            &self.texture_manager,
             command_buffer,
             image_index,
             &self.render_images,
@@ -370,6 +380,8 @@ impl Drop for Renderer {
             for scene in &mut self.scenes {
                 scene.destroy(&mut self.state);
             }
+
+            self.texture_manager.destroy(&mut self.state);
 
             self.render_images.destroy(&mut self.state);
 

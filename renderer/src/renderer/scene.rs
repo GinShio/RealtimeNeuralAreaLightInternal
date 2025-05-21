@@ -1,6 +1,8 @@
 use ash::vk;
 
-use crate::renderer::{render_images::RenderImages, vulkan_state::VulkanState};
+use crate::renderer::{
+    render_images::RenderImages, texture_manager::TextureManager, vulkan_state::VulkanState,
+};
 
 mod damaged_helmet;
 mod triangle;
@@ -14,6 +16,7 @@ pub trait Scene {
     fn cmd_draw(
         &mut self,
         state: &VulkanState,
+        texture_manager: &TextureManager,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         render_images: &RenderImages,

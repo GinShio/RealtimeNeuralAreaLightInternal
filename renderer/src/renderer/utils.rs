@@ -3,10 +3,11 @@ use std::ffi::CString;
 use anyhow::Result;
 use ash::vk;
 
-use crate::renderer::{vertex::Vertex, vulkan_state::VulkanState};
+use crate::renderer::{texture_manager::TextureManager, vertex::Vertex, vulkan_state::VulkanState};
 
 pub fn create_graphics_pipeline(
     state: &mut VulkanState,
+    texture_manager: &mut TextureManager,
     vertex_shader: &[u8],
     fragment_shader: &[u8],
     push_constant_ranges: &[vk::PushConstantRange],
@@ -104,8 +105,9 @@ pub fn create_graphics_pipeline(
         .depth_attachment_format(vk::Format::D24_UNORM_S8_UINT);
 
     // Create pipeline layout
+    let set_layouts = texture_manager.descriptor_set_layout();
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default()
-        .set_layouts(&[])
+        .set_layouts(&set_layouts)
         .push_constant_ranges(push_constant_ranges);
     let pipeline_layout = unsafe {
         state

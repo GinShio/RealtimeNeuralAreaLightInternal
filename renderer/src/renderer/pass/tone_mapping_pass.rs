@@ -45,10 +45,10 @@ impl ToneMappingPass {
             let descriptor_pool_size = [
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLED_IMAGE)
-                    .descriptor_count(1),
+                    .descriptor_count(Renderer::MAX_FRAMES_IN_FLIGHT as u32),
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::STORAGE_IMAGE)
-                    .descriptor_count(1),
+                    .descriptor_count(Renderer::MAX_FRAMES_IN_FLIGHT as u32),
             ];
             let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
                 .pool_sizes(&descriptor_pool_size)
@@ -61,20 +61,19 @@ impl ToneMappingPass {
         };
         // Create descriptor sets
         let descriptor_sets = {
-            let mut descriptor_sets = vec![];
-            for _ in 0..Renderer::MAX_FRAMES_IN_FLIGHT {
-                let set_layouts = [descriptor_set_layout];
-                let descriptor_set_allocate_info = vk::DescriptorSetAllocateInfo::default()
-                    .descriptor_pool(descriptor_pool)
-                    .set_layouts(&set_layouts);
-                let descriptor_set = unsafe {
-                    state
-                        .device
-                        .allocate_descriptor_sets(&descriptor_set_allocate_info)?
-                };
-                descriptor_sets.push(descriptor_set[0]);
+            let set_layouts = [descriptor_set_layout]
+                .into_iter()
+                .cycle()
+                .take(Renderer::MAX_FRAMES_IN_FLIGHT as usize)
+                .collect::<Vec<_>>();
+            let descriptor_set_allocate_info = vk::DescriptorSetAllocateInfo::default()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&set_layouts);
+            unsafe {
+                state
+                    .device
+                    .allocate_descriptor_sets(&descriptor_set_allocate_info)?
             }
-            descriptor_sets
         };
         // Update descriptor sets
         for (i, descriptor_set) in descriptor_sets.iter().enumerate() {

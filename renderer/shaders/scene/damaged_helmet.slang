@@ -1,19 +1,17 @@
+import "base.slang";
+
 struct PushConstants {
   float4x4 model;
   float4x4 view;
   float4x4 projection;
+  uint samplerIndex;
+  uint baseColorIndex;
+  uint normalIndex;
+  uint metallicRoughnessIndex;
 }
 
 [[push_constant]]
 PushConstants pc;
-
-struct VertexInput
-{
-  float3 position;
-  float3 normal;
-  float4 tangent;
-  float2 uv;
-}
 
 struct VertexOutput
 {
@@ -24,13 +22,6 @@ struct VertexOutput
   float2 uv : TEXCOORD3;
 }
 
-func srgbToLinear(color: float3) -> float3
-{
-  let useLinear = color <= 0.04045;
-  let v1 = color / 12.92;
-  let v2 = pow((color + 0.055) / 1.055, 2.4);
-  return select(useLinear, v1, v2);
-}
 
 float3x3 inverse3x3(float3x3 m)
 {
@@ -96,9 +87,20 @@ struct FragmentOutput
 [shader("fragment")]
 func fsMain(input: VertexOutput) -> FragmentOutput
 {
-  let normal = normalize(input.viewNormal);
-  let normalColor = srgbToLinear(0.5 * (normal + 1.0));
+  let sampler = samplerList[pc.samplerIndex];
+
+  float3 baseColor;
+  if (pc.baseColorIndex == 0xFFFFFFFF)
+  {
+    baseColor = float3(1.0, 0.0, 0.0);
+  }
+  else
+  {
+    let baseColorTexture = textures[pc.baseColorIndex];
+    baseColor = baseColorTexture.Sample(sampler, input.uv).rgb;
+  }
+
   return {
-      { normalColor, 1.0 },
+    { baseColor, 1.0 },
   };
 }

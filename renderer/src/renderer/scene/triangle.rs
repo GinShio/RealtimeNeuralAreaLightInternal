@@ -6,7 +6,8 @@ use gpu_allocator::{
 };
 
 use crate::renderer::{
-    render_images::RenderImages, scene::Scene, utils, vertex::Vertex, vulkan_state::VulkanState,
+    render_images::RenderImages, scene::Scene, texture_manager::TextureManager, utils,
+    vertex::Vertex, vulkan_state::VulkanState,
 };
 
 #[repr(C)]
@@ -28,11 +29,12 @@ pub struct TriangleScene {
     fill_color: [f32; 3],
 }
 impl TriangleScene {
-    pub fn new(state: &mut VulkanState) -> Result<Box<Self>> {
+    pub fn new(state: &mut VulkanState, texture_manager: &mut TextureManager) -> Result<Box<Self>> {
         // Create graphics pipeline
         let (pipeline_layout, pipeline) = {
             utils::create_graphics_pipeline(
                 state,
+                texture_manager,
                 include_bytes!(concat!(env!("OUT_DIR"), "/shaders/scene/triangle.vert.spv")),
                 include_bytes!(concat!(env!("OUT_DIR"), "/shaders/scene/triangle.frag.spv")),
                 &[vk::PushConstantRange {
@@ -220,6 +222,7 @@ impl Scene for TriangleScene {
     fn cmd_draw(
         &mut self,
         state: &VulkanState,
+        _texture_manager: &TextureManager,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         render_images: &RenderImages,

@@ -204,7 +204,28 @@ impl VulkanState {
                     .map(|(i, _)| i)
                     .next();
 
-                family_index.map(|index| (device, index))
+                // Check if the device supports bindless textures
+                let mut descriptor_indexing_features =
+                    vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default();
+                let mut features2 = vk::PhysicalDeviceFeatures2::default()
+                    .push_next(&mut descriptor_indexing_features);
+                unsafe { instance.get_physical_device_features2(device, &mut features2) };
+                let support_bindless_textures = descriptor_indexing_features
+                    .shader_sampled_image_array_non_uniform_indexing
+                    == vk::TRUE
+                    && descriptor_indexing_features
+                        .descriptor_binding_sampled_image_update_after_bind
+                        == vk::TRUE
+                    && descriptor_indexing_features.descriptor_binding_variable_descriptor_count
+                        == vk::TRUE
+                    && descriptor_indexing_features.descriptor_binding_partially_bound == vk::TRUE
+                    && descriptor_indexing_features.runtime_descriptor_array == vk::TRUE;
+
+                if support_bindless_textures {
+                    family_index.map(|index| (device, index))
+                } else {
+                    None
+                }
             });
 
             if let Some((device, index)) = physical_device {
@@ -220,15 +241,29 @@ impl VulkanState {
             // - synchronization2
             // - dynamic rendering
             // - extended dynamic state
+            // Use PhysicalDeviceDescriptorIndexingFeatures:
+            // - shader_sampled_image_array_non_uniform_indexing
+            // - descriptor_binding_sampled_image_update_after_bind
+            // - descriptor_binding_variable_descriptor_count
+            // - descriptor_binding_partially_bound
+            // - runtime_descriptor_array
             let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::default()
                 .synchronization2(true)
                 .dynamic_rendering(true);
             let mut extended_dynamic_state =
                 vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT::default()
                     .extended_dynamic_state(true);
+            let mut descriptor_indexing_features =
+                vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
+                    .shader_sampled_image_array_non_uniform_indexing(true)
+                    .descriptor_binding_sampled_image_update_after_bind(true)
+                    .descriptor_binding_variable_descriptor_count(true)
+                    .descriptor_binding_partially_bound(true)
+                    .runtime_descriptor_array(true);
             let mut enabled_features = vk::PhysicalDeviceFeatures2::default()
                 .push_next(&mut vulkan_13_features)
-                .push_next(&mut extended_dynamic_state);
+                .push_next(&mut extended_dynamic_state)
+                .push_next(&mut descriptor_indexing_features);
 
             let enabled_extension_names = [vk::KHR_SWAPCHAIN_NAME.as_ptr()];
 

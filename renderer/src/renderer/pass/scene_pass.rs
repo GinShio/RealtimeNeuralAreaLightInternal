@@ -1,7 +1,9 @@
 use ash::vk;
 
 use crate::renderer::scene::Scene;
-use crate::renderer::{render_images::RenderImages, vulkan_state::VulkanState};
+use crate::renderer::{
+    render_images::RenderImages, texture_manager::TextureManager, vulkan_state::VulkanState,
+};
 
 /// A struct that represents the scene pass.
 pub struct ScenePass;
@@ -15,6 +17,7 @@ impl ScenePass {
     pub fn cmd_draw(
         &self,
         state: &VulkanState,
+        texture_manager: &TextureManager,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         render_images: &RenderImages,
@@ -45,7 +48,13 @@ impl ScenePass {
         }
 
         // Record the command buffer
-        scene.cmd_draw(state, command_buffer, image_index, render_images);
+        scene.cmd_draw(
+            state,
+            texture_manager,
+            command_buffer,
+            image_index,
+            render_images,
+        );
     }
 
     /// Destroy the scene pass.

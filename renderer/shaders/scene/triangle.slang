@@ -1,3 +1,5 @@
+import "base.slang";
+
 struct PushConstants {
   bool fill;
   float3 fillColor;
@@ -5,14 +7,6 @@ struct PushConstants {
 
 [[push_constant]]
 PushConstants pc;
-
-struct VertexInput
-{
-  float3 position;
-  float3 color;
-  float4 tangent;
-  float2 uv;
-}
 
 struct VertexOutput
 {
@@ -43,7 +37,7 @@ func vsMain(input: VertexInput) -> VertexOutput
   } else {
     return {
       { input.position, 1.0 },
-      srgbToLinear(input.color),
+      srgbToLinear(input.normal),
       input.tangent,
       input.uv,
     };
