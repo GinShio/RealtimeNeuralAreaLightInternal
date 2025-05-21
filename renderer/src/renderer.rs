@@ -3,7 +3,6 @@ use ash::vk;
 use imgui::{Context, DrawData, Ui};
 use winit::window::Window;
 
-mod gltf_loader;
 mod model_data;
 mod pass;
 mod render_images;

@@ -62,7 +62,7 @@ impl CopyToSwapchainPass {
             let set_layouts = [descriptor_set_layout]
                 .into_iter()
                 .cycle()
-                .take(Renderer::MAX_FRAMES_IN_FLIGHT as usize)
+                .take(Renderer::MAX_FRAMES_IN_FLIGHT)
                 .collect::<Vec<_>>();
             let descriptor_set_allocate_info = vk::DescriptorSetAllocateInfo::default()
                 .descriptor_pool(descriptor_pool)

@@ -2,7 +2,6 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::renderer::{
-    gltf_loader::{GltfTextures, load_glb},
     model_data::ModelData,
     render_images::RenderImages,
     scene::Scene,
@@ -28,7 +27,7 @@ pub struct DamagedHelmetScene {
     pipeline: vk::Pipeline,
 
     sampler: SamplerIndex,
-    model_data: Vec<(ModelData, GltfTextures)>,
+    model_data: Vec<(ModelData, utils::GltfTextures)>,
 
     rotate: [f32; 3],
     camera_distance: f32,
@@ -66,7 +65,7 @@ impl DamagedHelmetScene {
         )?;
 
         // Load model data
-        let model_data = load_glb(state, texture_manager, "./assets/DamagedHelmet.glb")?;
+        let model_data = utils::load_glb(state, texture_manager, "./assets/DamagedHelmet.glb")?;
 
         Ok(Box::new(Self {
             pipeline_layout,

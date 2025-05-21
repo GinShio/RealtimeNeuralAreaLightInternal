@@ -7,6 +7,7 @@ use ash::ext::debug_utils;
 use ash::{
     Device, Entry, Instance,
     khr::{surface, swapchain},
+    nv::cooperative_vector,
     vk,
 };
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
@@ -70,6 +71,7 @@ pub struct VulkanState {
 
     pub device: Device,
     pub swapchain_fn: swapchain::Device,
+    pub cooperative_vector_fn: cooperative_vector::Device,
 
     pub queue: vk::Queue,
     pub swapchain: Swapchain,
@@ -221,7 +223,27 @@ impl VulkanState {
                     && descriptor_indexing_features.descriptor_binding_partially_bound == vk::TRUE
                     && descriptor_indexing_features.runtime_descriptor_array == vk::TRUE;
 
-                if support_bindless_textures {
+                // Check if support cooperative vector extensions
+                let extension_props = unsafe {
+                    instance
+                        .enumerate_device_extension_properties(device)
+                        .unwrap_or_default()
+                };
+                let support_cooperative_extension = extension_props.iter().any(|ext| {
+                    let ext_name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
+                    ext_name == cooperative_vector::NV_COOPERATIVE_VECTOR_NAME
+                });
+                let mut cooperative_features =
+                    cooperative_vector::PhysicalDeviceCooperativeVectorFeaturesNV::default();
+                let mut features2 =
+                    vk::PhysicalDeviceFeatures2::default().push_next(&mut cooperative_features);
+                unsafe {
+                    instance.get_physical_device_features2(device, &mut features2);
+                }
+                let support_cooperative_vector = support_cooperative_extension
+                    && cooperative_features.cooperative_vector == vk::TRUE;
+
+                if support_bindless_textures && support_cooperative_vector {
                     family_index.map(|index| (device, index))
                 } else {
                     None
@@ -265,7 +287,10 @@ impl VulkanState {
                 .push_next(&mut extended_dynamic_state)
                 .push_next(&mut descriptor_indexing_features);
 
-            let enabled_extension_names = [vk::KHR_SWAPCHAIN_NAME.as_ptr()];
+            let enabled_extension_names = [
+                vk::KHR_SWAPCHAIN_NAME.as_ptr(),
+                cooperative_vector::NV_COOPERATIVE_VECTOR_NAME.as_ptr(),
+            ];
 
             let queue_create_infos = vec![
                 vk::DeviceQueueCreateInfo::default()
@@ -347,6 +372,9 @@ impl VulkanState {
             }
         };
 
+        // Create cooperative vector device
+        let cooperative_vector_fn = cooperative_vector::Device::new(&instance, &device);
+
         // Create command pool
         let command_pool = {
             let create_info = vk::CommandPoolCreateInfo::default()
@@ -365,6 +393,66 @@ impl VulkanState {
             allocation_sizes: Default::default(),
         })?;
 
+        let _coop_vector_data = {
+            let rows = 16;
+            let cols = 32;
+            let stride = (cols * 2) as usize; // f16 = 2 bytes
+            let src_size = (rows * cols * 2) as usize;
+
+            // query output size
+            let mut required_size = 0;
+            let info = cooperative_vector::ConvertCooperativeVectorMatrixInfoNV::default()
+                .num_rows(rows)
+                .num_columns(cols)
+                .src_component_type(vk::ComponentTypeKHR::FLOAT16)
+                .src_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::RowMajor)
+                .src_stride(stride)
+                .src_size(src_size)
+                .src_data(vk::DeviceOrHostAddressConstKHR {
+                    host_address: std::ptr::null(),
+                })
+                .dst_component_type(vk::ComponentTypeKHR::FLOAT16)
+                .dst_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::InferencingOptimal)
+                .dst_stride(stride)
+                .dst_size(&mut required_size)
+                .dst_data(vk::DeviceOrHostAddressKHR {
+                    host_address: std::ptr::null_mut(),
+                });
+            unsafe {
+                cooperative_vector_fn.convert_cooperative_vector_matrix_nv(&info)?;
+            }
+            println!("required_size: {}", required_size);
+
+            // convert data tp inferencing optimal layout
+            let src_data = (0..128).cycle().take(src_size).collect::<Vec<_>>();
+            println!("src_data: {:?}", src_data);
+            let dst_data = vec![0_u8; required_size];
+            let src_stride = (cols * 2) as usize; // f16 = 2 bytes
+            let dst_stride = (rows * 2) as usize; // f16 = 2 bytes
+            let info = cooperative_vector::ConvertCooperativeVectorMatrixInfoNV::default()
+                .num_rows(rows)
+                .num_columns(cols)
+                .src_component_type(vk::ComponentTypeKHR::FLOAT16)
+                .src_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::RowMajor)
+                .src_stride(src_stride)
+                .src_size(src_size)
+                .src_data(vk::DeviceOrHostAddressConstKHR {
+                    host_address: src_data.as_ptr() as *const c_void,
+                })
+                .dst_component_type(vk::ComponentTypeKHR::FLOAT16)
+                .dst_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::InferencingOptimal)
+                .dst_stride(dst_stride)
+                .dst_size(&mut required_size)
+                .dst_data(vk::DeviceOrHostAddressKHR {
+                    host_address: dst_data.as_ptr() as *mut c_void,
+                });
+            unsafe {
+                cooperative_vector_fn.convert_cooperative_vector_matrix_nv(&info)?;
+            }
+            println!("dst_data: {:?}", dst_data);
+            dst_data
+        };
+
         Ok(Self {
             entry,
             instance,
@@ -377,6 +465,7 @@ impl VulkanState {
             physical_device,
             device,
             swapchain_fn,
+            cooperative_vector_fn,
             queue,
             swapchain,
             command_pool,

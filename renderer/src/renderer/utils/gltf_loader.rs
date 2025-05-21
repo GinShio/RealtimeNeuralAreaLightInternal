@@ -29,8 +29,8 @@ pub fn load_glb(
         texture_manager: &mut TextureManager,
         model_data: &mut Vec<(ModelData, GltfTextures)>,
         node: Node,
-        buffers: &Vec<buffer::Data>,
-        images: &Vec<gltf::image::Data>,
+        buffers: &[buffer::Data],
+        images: &[gltf::image::Data],
         parent_transform: glam::Mat4,
     ) {
         let local_transform = node.transform();
