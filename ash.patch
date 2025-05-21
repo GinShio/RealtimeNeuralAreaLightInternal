@@ -1,9 +1,9 @@
 diff --git a/ash/src/extensions/nv/cooperative_vector.rs b/ash/src/extensions/nv/cooperative_vector.rs
 new file mode 100644
-index 0000000..aa580a8
+index 0000000..727a58c
 --- /dev/null
 +++ b/ash/src/extensions/nv/cooperative_vector.rs
-@@ -0,0 +1,203 @@
+@@ -0,0 +1,205 @@
 +use std::os::raw::c_void;
 +
 +use crate::vk;
@@ -108,31 +108,33 @@ index 0000000..aa580a8
 +    pub num_rows: u32,
 +    pub num_columns: u32,
 +    pub src_layout: CooperativeVectorMatrixLayoutNV,
-+    pub src_stride: usize,
++    pub src_stride: vk::DeviceSize,
 +    pub dst_layout: CooperativeVectorMatrixLayoutNV,
-+    pub dst_stride: usize,
++    pub dst_stride: vk::DeviceSize,
 +}
 +impl Default for ConvertCooperativeVectorMatrixInfoNV {
 +    fn default() -> Self {
-+        Self {
-+            s_type: StructureType::CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV,
-+            p_next: std::ptr::null(),
-+            src_size: 0,
-+            src_data: DeviceOrHostAddressConstKHR {
++        unsafe {
++            let mut val: Self = std::mem::zeroed();
++            val.s_type = StructureType::CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV;
++            val.p_next = std::ptr::null();
++            val.src_size = 0;
++            val.src_data = DeviceOrHostAddressConstKHR {
 +                host_address: std::ptr::null(),
-+            },
-+            p_dst_size: std::ptr::null_mut(),
-+            dst_data: DeviceOrHostAddressKHR {
++            };
++            val.p_dst_size = std::ptr::null_mut();
++            val.dst_data = DeviceOrHostAddressKHR {
 +                host_address: std::ptr::null_mut(),
-+            },
-+            src_component_type: ComponentTypeKHR::FLOAT16,
-+            dst_component_type: ComponentTypeKHR::FLOAT16,
-+            num_rows: 0,
-+            num_columns: 0,
-+            src_layout: CooperativeVectorMatrixLayoutNV::RowMajor,
-+            src_stride: 0,
-+            dst_layout: CooperativeVectorMatrixLayoutNV::RowMajor,
-+            dst_stride: 0,
++            };
++            val.src_component_type = ComponentTypeKHR::FLOAT16;
++            val.dst_component_type = ComponentTypeKHR::FLOAT16;
++            val.num_rows = 0;
++            val.num_columns = 0;
++            val.src_layout = CooperativeVectorMatrixLayoutNV::RowMajor;
++            val.src_stride = 0;
++            val.dst_layout = CooperativeVectorMatrixLayoutNV::RowMajor;
++            val.dst_stride = 0;
++            val
 +        }
 +    }
 +}
@@ -157,7 +159,7 @@ index 0000000..aa580a8
 +        self
 +    }
 +
-+    pub fn src_stride(mut self, stride: usize) -> Self {
++    pub fn src_stride(mut self, stride: u64) -> Self {
 +        self.src_stride = stride;
 +        self
 +    }
@@ -182,7 +184,7 @@ index 0000000..aa580a8
 +        self
 +    }
 +
-+    pub fn dst_stride(mut self, stride: usize) -> Self {
++    pub fn dst_stride(mut self, stride: u64) -> Self {
 +        self.dst_stride = stride;
 +        self
 +    }
@@ -217,22 +219,10 @@ index b2b6f99..a2b4a49 100644
  pub mod coverage_reduction_mode;
  pub mod cuda_kernel_launch;
 diff --git a/ash/src/extensions_generated.rs b/ash/src/extensions_generated.rs
-index e831437..a276237 100644
+index e831437..e7f9ac4 100644
 --- a/ash/src/extensions_generated.rs
 +++ b/ash/src/extensions_generated.rs
-@@ -19720,6 +19720,11 @@ pub mod nv {
-                 }
-             }
-         }
-+
-+        // Add cooperative_vector module
-+        pub mod cooperative_vector {
-+            use super::super::*;
-+        }
-     }
-     #[doc = "VK_NV_per_stage_descriptor_set"]
-     pub mod per_stage_descriptor_set {
-@@ -19761,6 +19766,155 @@ pub mod nv {
+@@ -19761,6 +19761,155 @@ pub mod nv {
              crate::vk::NV_RAY_TRACING_VALIDATION_SPEC_VERSION as SPEC_VERSION,
          };
      }

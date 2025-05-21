@@ -393,66 +393,6 @@ impl VulkanState {
             allocation_sizes: Default::default(),
         })?;
 
-        let _coop_vector_data = {
-            let rows = 16;
-            let cols = 32;
-            let stride = (cols * 2) as usize; // f16 = 2 bytes
-            let src_size = (rows * cols * 2) as usize;
-
-            // query output size
-            let mut required_size = 0;
-            let info = cooperative_vector::ConvertCooperativeVectorMatrixInfoNV::default()
-                .num_rows(rows)
-                .num_columns(cols)
-                .src_component_type(vk::ComponentTypeKHR::FLOAT16)
-                .src_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::RowMajor)
-                .src_stride(stride)
-                .src_size(src_size)
-                .src_data(vk::DeviceOrHostAddressConstKHR {
-                    host_address: std::ptr::null(),
-                })
-                .dst_component_type(vk::ComponentTypeKHR::FLOAT16)
-                .dst_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::InferencingOptimal)
-                .dst_stride(stride)
-                .dst_size(&mut required_size)
-                .dst_data(vk::DeviceOrHostAddressKHR {
-                    host_address: std::ptr::null_mut(),
-                });
-            unsafe {
-                cooperative_vector_fn.convert_cooperative_vector_matrix_nv(&info)?;
-            }
-            println!("required_size: {}", required_size);
-
-            // convert data tp inferencing optimal layout
-            let src_data = (0..128).cycle().take(src_size).collect::<Vec<_>>();
-            println!("src_data: {:?}", src_data);
-            let dst_data = vec![0_u8; required_size];
-            let src_stride = (cols * 2) as usize; // f16 = 2 bytes
-            let dst_stride = (rows * 2) as usize; // f16 = 2 bytes
-            let info = cooperative_vector::ConvertCooperativeVectorMatrixInfoNV::default()
-                .num_rows(rows)
-                .num_columns(cols)
-                .src_component_type(vk::ComponentTypeKHR::FLOAT16)
-                .src_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::RowMajor)
-                .src_stride(src_stride)
-                .src_size(src_size)
-                .src_data(vk::DeviceOrHostAddressConstKHR {
-                    host_address: src_data.as_ptr() as *const c_void,
-                })
-                .dst_component_type(vk::ComponentTypeKHR::FLOAT16)
-                .dst_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::InferencingOptimal)
-                .dst_stride(dst_stride)
-                .dst_size(&mut required_size)
-                .dst_data(vk::DeviceOrHostAddressKHR {
-                    host_address: dst_data.as_ptr() as *mut c_void,
-                });
-            unsafe {
-                cooperative_vector_fn.convert_cooperative_vector_matrix_nv(&info)?;
-            }
-            println!("dst_data: {:?}", dst_data);
-            dst_data
-        };
-
         Ok(Self {
             entry,
             instance,

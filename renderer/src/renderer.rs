@@ -80,46 +80,40 @@ impl Renderer {
         };
 
         // Create synchronization objects
-        let (acquire_next_image_semaphores, render_finished_semaphores, fences) = {
-            (0..Self::MAX_FRAMES_IN_FLIGHT)
-                .map(|_| {
-                    let mut render_finished_semaphore_create_info =
-                        vk::SemaphoreTypeCreateInfo::default();
-                    let create_info = vk::SemaphoreCreateInfo::default()
-                        .push_next(&mut render_finished_semaphore_create_info);
-                    let render_finished_semaphore = unsafe {
-                        state
-                            .device
-                            .create_semaphore(&create_info, None)
-                            .expect("Failed to create timeline semaphore")
-                    };
-
-                    let acquire_next_image_semaphore_create_info =
-                        vk::SemaphoreCreateInfo::default();
-                    let acquire_next_image_semaphore = unsafe {
-                        state
-                            .device
-                            .create_semaphore(&acquire_next_image_semaphore_create_info, None)
-                            .expect("Failed to create present semaphore")
-                    };
-
-                    let fence_create_info =
-                        vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
-                    let fence = unsafe {
-                        state
-                            .device
-                            .create_fence(&fence_create_info, None)
-                            .expect("Failed to create fence")
-                    };
-
-                    (
-                        acquire_next_image_semaphore,
-                        render_finished_semaphore,
-                        fence,
-                    )
-                })
-                .collect::<(Vec<_>, Vec<_>, Vec<_>)>()
-        };
+        let acquire_next_image_semaphores = (0..Self::MAX_FRAMES_IN_FLIGHT)
+            .map(|_| {
+                let create_info = vk::SemaphoreCreateInfo::default();
+                unsafe {
+                    state
+                        .device
+                        .create_semaphore(&create_info, None)
+                        .expect("Failed to create timeline semaphore")
+                }
+            })
+            .collect::<Vec<_>>();
+        let render_finished_semaphores = (0..state.swapchain.images.len())
+            .map(|_| {
+                let create_info = vk::SemaphoreCreateInfo::default();
+                unsafe {
+                    state
+                        .device
+                        .create_semaphore(&create_info, None)
+                        .expect("Failed to create timeline semaphore")
+                }
+            })
+            .collect::<Vec<_>>();
+        let fences = (0..Self::MAX_FRAMES_IN_FLIGHT)
+            .map(|_| {
+                let fence_create_info =
+                    vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
+                unsafe {
+                    state
+                        .device
+                        .create_fence(&fence_create_info, None)
+                        .expect("Failed to create fence")
+                }
+            })
+            .collect::<Vec<_>>();
 
         Ok(Self {
             state,
@@ -164,6 +158,9 @@ impl Renderer {
             }
         }
 
+        // recreate swapchain
+        self.state.recreate_swapchain(width, height)?;
+
         // recreate semaphores
         unsafe {
             self.acquire_next_image_semaphores = (0..Self::MAX_FRAMES_IN_FLIGHT)
@@ -175,7 +172,7 @@ impl Renderer {
                         .expect("Failed to create timeline semaphore")
                 })
                 .collect();
-            self.render_finished_semaphores = (0..Self::MAX_FRAMES_IN_FLIGHT)
+            self.render_finished_semaphores = (0..self.state.swapchain.images.len())
                 .map(|_| {
                     let create_info = vk::SemaphoreCreateInfo::default();
                     self.state
@@ -185,9 +182,6 @@ impl Renderer {
                 })
                 .collect();
         }
-
-        // recreate swapchain
-        self.state.recreate_swapchain(width, height)?;
 
         // recreate render images
         self.render_images.recreate(&mut self.state)?;
@@ -328,7 +322,7 @@ impl Renderer {
             .semaphore(self.acquire_next_image_semaphores[in_flight_index])
             .stage_mask(vk::PipelineStageFlags2KHR::COLOR_ATTACHMENT_OUTPUT)];
         let signal_semaphore_infos = [vk::SemaphoreSubmitInfo::default()
-            .semaphore(self.render_finished_semaphores[in_flight_index])
+            .semaphore(self.render_finished_semaphores[image_index])
             .stage_mask(vk::PipelineStageFlags2KHR::BOTTOM_OF_PIPE)];
         let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(&command_buffer_infos)
@@ -345,7 +339,7 @@ impl Renderer {
         // Present
         let swapchains = [self.state.swapchain.swapchain];
         let image_indices = [image_index as u32];
-        let wait_semaphores = [self.render_finished_semaphores[in_flight_index]];
+        let wait_semaphores = [self.render_finished_semaphores[image_index]];
         let present_info = vk::PresentInfoKHR::default()
             .swapchains(&swapchains)
             .image_indices(&image_indices)
