@@ -1,0 +1,11 @@
+[project]
+name = "training"
+version = "0.1.0"
+description = "PyTorch training with GPU support using CUDA"
+requires-python = ">=3.11"
+
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "tqdm"
+]

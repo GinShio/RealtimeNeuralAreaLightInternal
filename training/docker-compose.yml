@@ -1,0 +1,20 @@
+services:
+  training:
+    build:
+      context: .
+      dockerfile: ./dockerfile
+    container_name: training
+    entrypoint: ["/workspace/entrypoint.sh"]
+    volumes:
+      - .:/workspace
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities: [gpu]
