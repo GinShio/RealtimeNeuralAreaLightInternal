@@ -68,6 +68,18 @@ fn main() {
             "fsMain",
         ),
         (
+            "scene/color_triangle.slang",
+            "scene/color_triangle.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/color_triangle.slang",
+            "scene/color_triangle.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
+        (
             "tone_mapping.slang",
             "tone_mapping.comp.spv",
             "compute",

@@ -11,6 +11,7 @@ pub fn create_graphics_pipeline(
     vertex_shader: &[u8],
     fragment_shader: &[u8],
     push_constant_ranges: &[vk::PushConstantRange],
+    descriptor_set_layouts: &[vk::DescriptorSetLayout],
 ) -> Result<(vk::PipelineLayout, vk::Pipeline)> {
     // Create shader stage create infos
     let vertex_shader_module = {
@@ -105,7 +106,11 @@ pub fn create_graphics_pipeline(
         .depth_attachment_format(vk::Format::D24_UNORM_S8_UINT);
 
     // Create pipeline layout
-    let set_layouts = texture_manager.descriptor_set_layout();
+    let mut set_layouts = vec![];
+    set_layouts.extend(texture_manager.descriptor_set_layout());
+    for &set_layout in descriptor_set_layouts {
+        set_layouts.push(set_layout);
+    }
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default()
         .set_layouts(&set_layouts)
         .push_constant_ranges(push_constant_ranges);

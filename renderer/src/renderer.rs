@@ -4,6 +4,7 @@ use imgui::{Context, DrawData, Ui};
 use winit::window::Window;
 
 mod model_data;
+mod network;
 mod pass;
 mod render_images;
 mod scene;
@@ -58,6 +59,7 @@ impl Renderer {
         let scenes: Vec<Box<dyn scene::Scene>> = vec![
             scene::TriangleScene::new(&mut state, &mut texture_manager)?,
             scene::DamagedHelmetScene::new(&mut state, &mut texture_manager)?,
+            scene::ColorTriangleScene::new(&mut state, &mut texture_manager)?,
         ];
 
         // Create pass

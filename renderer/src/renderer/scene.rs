@@ -4,9 +4,11 @@ use crate::renderer::{
     render_images::RenderImages, texture_manager::TextureManager, vulkan_state::VulkanState,
 };
 
+mod color_triangle;
 mod damaged_helmet;
 mod triangle;
 
+pub use color_triangle::ColorTriangleScene;
 pub use damaged_helmet::DamagedHelmetScene;
 pub use triangle::TriangleScene;
 

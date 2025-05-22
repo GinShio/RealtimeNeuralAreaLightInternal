@@ -6,6 +6,7 @@ use anyhow::Result;
 use ash::ext::debug_utils;
 use ash::{
     Device, Entry, Instance,
+    ext::shader_replicated_composites,
     khr::{surface, swapchain},
     nv::cooperative_vector,
     vk,
@@ -223,27 +224,40 @@ impl VulkanState {
                     && descriptor_indexing_features.descriptor_binding_partially_bound == vk::TRUE
                     && descriptor_indexing_features.runtime_descriptor_array == vk::TRUE;
 
-                // Check if support cooperative vector extensions
-                let extension_props = unsafe {
-                    instance
-                        .enumerate_device_extension_properties(device)
-                        .unwrap_or_default()
-                };
+
+                    // extension properties
+                    let extension_props = unsafe {
+                        instance
+                            .enumerate_device_extension_properties(device)
+                            .unwrap_or_default()
+                    };
+
+                // Check if support required extensions
                 let support_cooperative_extension = extension_props.iter().any(|ext| {
                     let ext_name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
                     ext_name == cooperative_vector::NV_COOPERATIVE_VECTOR_NAME
                 });
+                let support_shader_replicated_extension = extension_props.iter().any(|ext| {
+                    let ext_name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
+                    ext_name == shader_replicated_composites::EXT_SHADER_REPLICATED_COMPOSITES_NAME
+                });
+                let support_extensions = support_cooperative_extension
+                    && support_shader_replicated_extension;
+
+                // Check if support required features
                 let mut cooperative_features =
                     cooperative_vector::PhysicalDeviceCooperativeVectorFeaturesNV::default();
+                    let mut replicated_composites_features =
+                        shader_replicated_composites::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default();
                 let mut features2 =
-                    vk::PhysicalDeviceFeatures2::default().push_next(&mut cooperative_features);
+                    vk::PhysicalDeviceFeatures2::default().push_next(&mut cooperative_features).push_next(&mut replicated_composites_features);
                 unsafe {
                     instance.get_physical_device_features2(device, &mut features2);
                 }
-                let support_cooperative_vector = support_cooperative_extension
-                    && cooperative_features.cooperative_vector == vk::TRUE;
+                let support_features = cooperative_features.cooperative_vector == vk::TRUE
+                    && replicated_composites_features.shader_replicated_composites == vk::TRUE;
 
-                if support_bindless_textures && support_cooperative_vector {
+                if support_bindless_textures && support_extensions && support_features {
                     family_index.map(|index| (device, index))
                 } else {
                     None
@@ -259,37 +273,55 @@ impl VulkanState {
 
         // Create Device
         let device = {
-            // Use Vulkan 1.3 features:
-            // - synchronization2
-            // - dynamic rendering
-            // - extended dynamic state
-            // Use PhysicalDeviceDescriptorIndexingFeatures:
+            // Use Vulkan 1.1 features:
+            // - storage_buffer16_bit_access
+            // Use Vulkan 1.2 features:
+            // - shader_float_16
             // - shader_sampled_image_array_non_uniform_indexing
             // - descriptor_binding_sampled_image_update_after_bind
             // - descriptor_binding_variable_descriptor_count
             // - descriptor_binding_partially_bound
             // - runtime_descriptor_array
+            // Use Vulkan 1.3 features:
+            // - synchronization2
+            // - dynamic rendering
+            // - extended dynamic state
+            // Use cooperative vector features:
+            // - cooperative_vector
+            // - shader_replicated_composites
+            let mut vulkan_11_features =
+                vk::PhysicalDeviceVulkan11Features::default().storage_buffer16_bit_access(true);
+            let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::default()
+                .shader_float16(true)
+                .shader_sampled_image_array_non_uniform_indexing(true)
+                .descriptor_binding_sampled_image_update_after_bind(true)
+                .descriptor_binding_variable_descriptor_count(true)
+                .descriptor_binding_partially_bound(true)
+                .runtime_descriptor_array(true);
             let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::default()
                 .synchronization2(true)
                 .dynamic_rendering(true);
             let mut extended_dynamic_state =
                 vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT::default()
                     .extended_dynamic_state(true);
-            let mut descriptor_indexing_features =
-                vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
-                    .shader_sampled_image_array_non_uniform_indexing(true)
-                    .descriptor_binding_sampled_image_update_after_bind(true)
-                    .descriptor_binding_variable_descriptor_count(true)
-                    .descriptor_binding_partially_bound(true)
-                    .runtime_descriptor_array(true);
+            let mut replicated_composites_features =
+                shader_replicated_composites::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default()
+                    .shader_replicated_composites(true);
+            let mut cooperative_vector_features =
+                cooperative_vector::PhysicalDeviceCooperativeVectorFeaturesNV::default()
+                    .cooperative_vector(true);
             let mut enabled_features = vk::PhysicalDeviceFeatures2::default()
+                .push_next(&mut vulkan_11_features)
+                .push_next(&mut vulkan_12_features)
                 .push_next(&mut vulkan_13_features)
                 .push_next(&mut extended_dynamic_state)
-                .push_next(&mut descriptor_indexing_features);
+                .push_next(&mut replicated_composites_features)
+                .push_next(&mut cooperative_vector_features);
 
             let enabled_extension_names = [
                 vk::KHR_SWAPCHAIN_NAME.as_ptr(),
                 cooperative_vector::NV_COOPERATIVE_VECTOR_NAME.as_ptr(),
+                shader_replicated_composites::EXT_SHADER_REPLICATED_COMPOSITES_NAME.as_ptr(),
             ];
 
             let queue_create_infos = vec![

@@ -53,6 +53,7 @@ impl DamagedHelmetScene {
                     offset: 0,
                     size: std::mem::size_of::<PushConstants>() as u32,
                 }],
+                &[],
             )?
         };
 

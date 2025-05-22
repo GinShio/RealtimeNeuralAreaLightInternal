@@ -1,9 +1,68 @@
+diff --git a/ash/src/extensions/ext/mod.rs b/ash/src/extensions/ext/mod.rs
+index ac1171c7..c212329b 100644
+--- a/ash/src/extensions/ext/mod.rs
++++ b/ash/src/extensions/ext/mod.rs
+@@ -22,6 +22,7 @@ pub mod pipeline_properties;
+ pub mod private_data;
+ pub mod sample_locations;
+ pub mod shader_object;
++pub mod shader_replicated_composites;
+ pub mod swapchain_maintenance1;
+ pub mod tooling_info;
+ pub mod vertex_input_dynamic_state;
+diff --git a/ash/src/extensions/ext/shader_replicated_composites.rs b/ash/src/extensions/ext/shader_replicated_composites.rs
+new file mode 100644
+index 00000000..329aa8ea
+--- /dev/null
++++ b/ash/src/extensions/ext/shader_replicated_composites.rs
+@@ -0,0 +1,41 @@
++use core::ffi::CStr;
++use std::os::raw::c_void;
++
++use crate::vk;
++use crate::vk::StructureType;
++
++pub const EXT_SHADER_REPLICATED_COMPOSITES_NAME: &CStr =
++    unsafe { CStr::from_bytes_with_nul_unchecked(b"VK_EXT_shader_replicated_composites\0") };
++pub const EXT_SHADER_REPLICATED_COMPOSITES_SPEC_VERSION: u32 = 1;
++
++#[repr(C)]
++#[derive(Debug, Clone)]
++pub struct PhysicalDeviceShaderReplicatedCompositesFeaturesEXT {
++    pub s_type: StructureType,
++    pub p_next: *mut c_void,
++    pub shader_replicated_composites: vk::Bool32,
++}
++impl Default for PhysicalDeviceShaderReplicatedCompositesFeaturesEXT {
++    fn default() -> Self {
++        Self {
++            s_type: StructureType::PHYSICAL_DEVICE_SHADER_REPLICATED_COMPOSITES_FEATURES_EXT,
++            p_next: std::ptr::null_mut(),
++            shader_replicated_composites: vk::FALSE,
++        }
++    }
++}
++impl PhysicalDeviceShaderReplicatedCompositesFeaturesEXT {
++    pub fn shader_replicated_composites(mut self, shader_replicated_composites: bool) -> Self {
++        self.shader_replicated_composites = if shader_replicated_composites {
++            vk::TRUE
++        } else {
++            vk::FALSE
++        };
++        self
++    }
++}
++
++unsafe impl vk::ExtendsPhysicalDeviceFeatures2
++    for PhysicalDeviceShaderReplicatedCompositesFeaturesEXT
++{
++}
 diff --git a/ash/src/extensions/nv/cooperative_vector.rs b/ash/src/extensions/nv/cooperative_vector.rs
 new file mode 100644
-index 00000000..727a58cd
+index 00000000..45a4a12f
 --- /dev/null
 +++ b/ash/src/extensions/nv/cooperative_vector.rs
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,224 @@
 +use std::os::raw::c_void;
 +
 +use crate::vk;
@@ -52,6 +111,25 @@ index 00000000..727a58cd
 +            cooperative_vector: vk::FALSE,
 +            cooperative_vector_training: vk::FALSE,
 +        }
++    }
++}
++impl PhysicalDeviceCooperativeVectorFeaturesNV {
++    pub fn cooperative_vector(mut self, cooperative_vector: bool) -> Self {
++        self.cooperative_vector = if cooperative_vector {
++            vk::TRUE
++        } else {
++            vk::FALSE
++        };
++        self
++    }
++
++    pub fn cooperative_vector_training(mut self, cooperative_vector_training: bool) -> Self {
++        self.cooperative_vector_training = if cooperative_vector_training {
++            vk::TRUE
++        } else {
++            vk::FALSE
++        };
++        self
 +    }
 +}
 +
@@ -219,10 +297,29 @@ index b2b6f990..a2b4a499 100644
  pub mod coverage_reduction_mode;
  pub mod cuda_kernel_launch;
 diff --git a/ash/src/extensions_generated.rs b/ash/src/extensions_generated.rs
-index e831437d..e7f9ac43 100644
+index e831437d..b8833168 100644
 --- a/ash/src/extensions_generated.rs
 +++ b/ash/src/extensions_generated.rs
-@@ -19761,6 +19761,155 @@ pub mod nv {
+@@ -8406,6 +8406,18 @@ pub mod ext {
+             }
+         }
+     }
++
++    pub mod shader_replicated_composites {
++        use super::super::*;
++        pub use crate::extensions::ext::shader_replicated_composites::*;
++
++        pub use {
++            EXT_SHADER_REPLICATED_COMPOSITES_NAME as NAME,
++            EXT_SHADER_REPLICATED_COMPOSITES_SPEC_VERSION as SPEC_VERSION,
++        };
++
++        pub use PhysicalDeviceShaderReplicatedCompositesFeaturesEXT;
++    }
+ }
+ #[doc = "Extensions tagged FUCHSIA"]
+ pub mod fuchsia {
+@@ -19761,6 +19773,155 @@ pub mod nv {
              crate::vk::NV_RAY_TRACING_VALIDATION_SPEC_VERSION as SPEC_VERSION,
          };
      }
@@ -393,10 +490,10 @@ index 2f829d16..452aa84a 100644
  #![allow(
      clippy::too_many_arguments,
 diff --git a/ash/src/vk/enums.rs b/ash/src/vk/enums.rs
-index 643ca025..c4435c32 100644
+index 643ca025..e1647b47 100644
 --- a/ash/src/vk/enums.rs
 +++ b/ash/src/vk/enums.rs
-@@ -913,6 +913,12 @@ impl StructureType {
+@@ -913,6 +913,13 @@ impl StructureType {
      pub const LOADER_INSTANCE_CREATE_INFO: Self = Self(47);
      #[doc = "Reserved for internal use by the loader, layers, and ICDs"]
      pub const LOADER_DEVICE_CREATE_INFO: Self = Self(48);
@@ -406,6 +503,7 @@ index 643ca025..c4435c32 100644
 +    pub const PHYSICAL_DEVICE_COOPERATIVE_VECTOR_PROPERTIES_NV: Self = Self(1000491001);
 +    pub const COOPERATIVE_VECTOR_PROPERTIES_NV: Self = Self(1000491002);
 +    pub const CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV: Self = Self(1000491004);
++    pub const PHYSICAL_DEVICE_SHADER_REPLICATED_COMPOSITES_FEATURES_EXT: Self = Self(1000564000);
  }
  #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
  #[repr(transparent)]
