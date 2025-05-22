@@ -12,9 +12,9 @@ def train(epochs):
         def __init__(self):
             super().__init__()
             self.fc1 = nn.Linear(3, 32)
-            self.act1 = nn.Sigmoid()
+            self.act1 = nn.ReLU()
             self.fc2 = nn.Linear(32, 32)
-            self.act2 = nn.Sigmoid()
+            self.act2 = nn.ReLU()
             self.fc3 = nn.Linear(32, 3)
             self.act3 = nn.Sigmoid()
 

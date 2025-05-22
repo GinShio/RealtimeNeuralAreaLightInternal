@@ -27,9 +27,9 @@ args = parser.parse_args()
 print("Model name:", args.model)
 
 if args.model == "color":
-    import model.color
+    import train.color
 
-    model.color.train(epochs=args.epochs)
+    train.color.train(epochs=args.epochs)
 elif args.model == "disney":
     # import model.disney
     # model.disney.train()
