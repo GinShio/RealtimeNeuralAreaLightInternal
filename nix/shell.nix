@@ -10,8 +10,8 @@ let
 in {
   devShell = craneLib.devShell {
     buildInputs = with pkgs;
-      [ mold clang stdenv ] ++ slangc ++ vulkanPackages ++ waylandPackages
-      ++ x11Packages;
+      [ mold clang stdenv python312Full ] ++ slangc ++ vulkanPackages
+      ++ waylandPackages ++ x11Packages;
 
     # set the Vulkan environment variables
     env = {
