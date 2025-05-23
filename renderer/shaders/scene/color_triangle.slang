@@ -4,8 +4,6 @@ import "../rtxns/CooperativeVectorFunctions";
 import "../rtxns/Utils";
 import "../rtxns/LinearOps";
 
-
-
 [[vk::binding(0, 2)]]
 StructuredBuffer<half> params;
 
@@ -56,7 +54,6 @@ struct FragmentOutput
 [shader("fragment")]
 func fsMain(input: VertexOutput) -> FragmentOutput
 {
-
   CoopVec<half, 3> inputParams;
   CoopVec<half, 32> hiddenParams;
   CoopVec<half, 3> outputParams;

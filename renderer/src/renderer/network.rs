@@ -6,8 +6,8 @@ use anyhow::{Result, anyhow};
 use ash::{nv::cooperative_vector, vk};
 use half::f16;
 
-const COOPERATIVE_VECTOR_MATRIX_ALIGNMENT: usize = 64;
-const COOPERATIVE_VECTOR_VECTOR_ALIGNMENT: usize = 16;
+const COOPERATIVE_VECTOR_MATRIX_ALIGNMENT: u32 = 64;
+const COOPERATIVE_VECTOR_VECTOR_ALIGNMENT: u32 = 16;
 
 pub struct Network {
     pub data: Vec<u8>,
@@ -15,9 +15,8 @@ pub struct Network {
     pub bias_offsets: Vec<u32>,
 }
 impl Network {
-    fn align_to(alignment: usize, offset: u32) -> u32 {
-        let align = alignment as u32;
-        ((offset + align - 1) / align) * align
+    fn align_to(alignment: u32, offset: u32) -> u32 {
+        offset.div_ceil(alignment) * alignment
     }
 
     fn query_matrix_byte_size(
@@ -58,7 +57,7 @@ impl Network {
         cols: u32,
         required_size: usize,
     ) -> Result<Vec<u8>> {
-        let mut result = vec![0u8; required_size as usize];
+        let mut result = vec![0u8; required_size];
 
         let size = (rows * cols) as usize * std::mem::size_of::<f16>();
 
