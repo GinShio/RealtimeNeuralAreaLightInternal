@@ -21,7 +21,7 @@ def normalize(v):
 
 
 def data_gen(
-    total_samples=1000000,
+    total_samples=200000,
     seed=42,
     train_ratio=0.95,
 ):

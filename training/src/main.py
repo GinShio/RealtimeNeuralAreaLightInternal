@@ -85,7 +85,7 @@ elif args.command == "data_gen":
         import data_gen.disney as disney
 
         disney.data_gen()
-    if args.model == "disney-rtxns":
+    elif args.model == "disney-rtxns":
         import data_gen.disney_rtxns as disney
 
         disney.data_gen()

@@ -120,7 +120,7 @@ def train(epochs):
                 max_data = batch_out[max_index]
                 if losses.max() > 0.05:
                     print(
-                        f"  Iteration {i}/{len(dataloader)} Loss: {loss.item() / batch_size:.6f} MaxLoss: {losses.max():.6f} y: ({max_data[0]:.6f} {max_data[1]:.6f} {max_data[2]:.6f} {max_data[3]:.6f}) y_pred: ({preds[max_index][0]:.6f} {preds[max_index][1]:.6f} {preds[max_index][2]:.6f} {preds[max_index][3]:.6f})"
+                        f"  Iteration {i}/{len(dataloader)} Loss: {loss.item() / batch_size:.6f} MaxLoss: {losses.max():.6f} y: ({max_data[0]:.6f} {max_data[1]:.6f} {max_data[2]:.6f} {max_data[3]:.6f}) y_pred: ({preds[max_index][0]:.6f} {preds[max_index][1]:.6f} {preds[max_index][2]:.6f} {preds[max_index][3]:.6f}) roughness: {batch_in[max_index][4]:.6f} NdotH: {batch_in[max_index][2]:.6f}"
                     )
         train_loss = epoch_loss / len(dataset)
 
@@ -170,5 +170,5 @@ def train(epochs):
     }
 
     os.makedirs("output", exist_ok=True)
-    with open("output/disney.json", "w") as f:
+    with open("output/disney-rtxns.json", "w") as f:
         json.dump(model_json, f, indent=2)

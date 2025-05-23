@@ -7,46 +7,46 @@ import numpy as np
 from data_gen.disney import DisneyBRDFDataset
 
 
-class FourierFeatureEmbedding(nn.Module):
-    def __init__(self, input_dim: int, num_frequencies: int, scale: float = 1.0):
-        """
-        Fourier Feature Embedding Layer
+# class FourierFeatureEmbedding(nn.Module):
+#     def __init__(self, input_dim: int, num_frequencies: int, scale: float = 1.0):
+#         """
+#         Fourier Feature Embedding Layer
 
-        Parameters:
-            input_dim (int): 入力ベクトルの次元数
-            num_frequencies (int): 周波数の数（各次元に対するsin/cosのペア数）
-            scale (float): 周波数のスケーリングファクター（通常は1またはπなど）
-        """
-        super().__init__()
-        self.input_dim = input_dim
-        self.num_frequencies = num_frequencies
-        self.scale = scale
+#         Parameters:
+#             input_dim (int): 入力ベクトルの次元数
+#             num_frequencies (int): 周波数の数（各次元に対するsin/cosのペア数）
+#             scale (float): 周波数のスケーリングファクター（通常は1またはπなど）
+#         """
+#         super().__init__()
+#         self.input_dim = input_dim
+#         self.num_frequencies = num_frequencies
+#         self.scale = scale
 
-        # 各次元に対して異なる周波数を割り当てる
-        frequencies = (
-            torch.linspace(1.0, 2.0 ** (num_frequencies - 1), num_frequencies) * scale
-        )
-        self.register_buffer("frequencies", frequencies)
+#         # 各次元に対して異なる周波数を割り当てる
+#         frequencies = (
+#             torch.linspace(1.0, 2.0 ** (num_frequencies - 1), num_frequencies) * scale
+#         )
+#         self.register_buffer("frequencies", frequencies)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Parameters:
-            x (Tensor): [batch_size, input_dim]のテンソル
+#     def forward(self, x: torch.Tensor) -> torch.Tensor:
+#         """
+#         Parameters:
+#             x (Tensor): [batch_size, input_dim]のテンソル
 
-        Returns:
-            Tensor: [batch_size, input_dim * num_frequencies * 2]のFourier埋め込みテンソル
-        """
-        x = x.unsqueeze(-1)  # [B, input_dim, 1]
-        freqs = self.frequencies.to(x.device)  # [num_frequencies]
-        x_proj = x * freqs  # [B, input_dim, num_frequencies]
+#         Returns:
+#             Tensor: [batch_size, input_dim * num_frequencies * 2]のFourier埋め込みテンソル
+#         """
+#         x = x.unsqueeze(-1)  # [B, input_dim, 1]
+#         freqs = self.frequencies.to(x.device)  # [num_frequencies]
+#         x_proj = x * freqs  # [B, input_dim, num_frequencies]
 
-        sin = torch.sin(2 * np.pi * x_proj)
-        cos = torch.cos(2 * np.pi * x_proj)
-        fourier_features = torch.cat(
-            [sin, cos], dim=-1
-        )  # [B, input_dim, num_frequencies * 2]
+#         sin = torch.sin(2 * np.pi * x_proj)
+#         cos = torch.cos(2 * np.pi * x_proj)
+#         fourier_features = torch.cat(
+#             [sin, cos], dim=-1
+#         )  # [B, input_dim, num_frequencies * 2]
 
-        return fourier_features.view(x.shape[0], -1)  # フラット化
+#         return fourier_features.view(x.shape[0], -1)  # フラット化
 
 
 # training MLP for DisneyBRDF
@@ -57,8 +57,9 @@ def train(epochs):
         def __init__(self):
             super().__init__()
             # self.fc1 = nn.Linear(23, 128)
-            self.ffe = FourierFeatureEmbedding(15, 6, scale=1.0)
-            self.fc1 = nn.Linear(15 * 6 * 2, 128)
+            self.fc1 = nn.Linear(15, 128)
+            # self.ffe = FourierFeatureEmbedding(15, 6, scale=1.0)
+            # self.fc1 = nn.Linear(15 * 6 * 2, 128)
             self.act1 = nn.ReLU()
             self.fc2 = nn.Linear(128, 128)
             self.act2 = nn.ReLU()
@@ -70,7 +71,7 @@ def train(epochs):
             self.act5 = nn.ReLU()
 
         def forward(self, x):
-            x = self.ffe(x)
+            # x = self.ffe(x)
             x = self.act1(self.fc1(x))
             x = self.act2(self.fc2(x))
             x = self.act3(self.fc3(x))
@@ -128,7 +129,7 @@ def train(epochs):
                 max_data = batch_out[max_index]
                 if losses.max() > 0.05:
                     print(
-                        f"  Iteration {i}/{len(dataloader)} Loss: {loss.item() / batch_size:.6f} MaxLoss: {losses.max():.6f} y: ({max_data[0]:.6f} {max_data[1]:.6f} {max_data[2]:.6f}) y_pred: ({preds[max_index][0]:.6f} {preds[max_index][1]:.6f} {preds[max_index][2]:.6f})"
+                        f"  Iteration {i}/{len(dataloader)} Loss: {loss.item() / batch_size:.6f} MaxLoss: {losses.max():.6f} y: ({max_data[0]:.6f} {max_data[1]:.6f} {max_data[2]:.6f}) y_pred: ({preds[max_index][0]:.6f} {preds[max_index][1]:.6f} {preds[max_index][2]:.6f}) roughness: {batch_in[max_index][4]:.6f}"
                     )
         train_loss = epoch_loss / len(dataset)
 
