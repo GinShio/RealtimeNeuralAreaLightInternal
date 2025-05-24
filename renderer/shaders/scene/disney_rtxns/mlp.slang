@@ -188,8 +188,9 @@ func fsMain(input: VertexOutput) -> FragmentOutput
   {
     let light = uniforms.light[i];
 
-    let L = normalize(light.position - input.viewPosition);
-    let H = normalize(-L + V);
+    let lightViewPosition = mul(uniforms.view, float4(light.position, 1.0)).xyz;
+    let L = normalize(lightViewPosition - input.viewPosition);
+    let H = normalize(L + V);
 
     let NdotL = max(dot(N, L), 0.0);
     let NdotV = max(dot(N, V), 0.0);
@@ -251,8 +252,6 @@ func fsMain(input: VertexOutput) -> FragmentOutput
     float3 colorh = max(brdfn * float3(NdotL), 0.0) * light.intensity * light.color;
 
     color += (NdotL > 0.0 && NdotV > 0.0)? colorh : 0.0;
-
-    color = brdfn;
   }
 
   return {

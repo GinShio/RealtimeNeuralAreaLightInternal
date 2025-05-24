@@ -4,6 +4,8 @@ import "../../rtxns/CooperativeVectorFunctions";
 import "../../rtxns/Utils";
 import "../../rtxns/LinearOps";
 
+import "disney.slang";
+
 [[vk::binding(0, 2)]]
 StructuredBuffer<half> params;
 
@@ -184,13 +186,39 @@ func fsMain(input: VertexOutput) -> FragmentOutput
   let N = normalMap(input.viewNormal, input.viewTangent, normal);
 
 
-  var color = float3(0.0, 0.0, 0.0);
+  var analyticColor = float3(0.0, 0.0, 0.0);
   for (var i = 0; i < uniforms.light_count; i++)
   {
     let light = uniforms.light[i];
 
-    let L = normalize(light.position - input.viewPosition);
-    let H = normalize(-L + V);
+    let lightViewPosition = mul(uniforms.view, float4(light.position, 1.0)).xyz;
+    let L = normalize(lightViewPosition - input.viewPosition);
+    let H = normalize(L + V);
+
+    let NdotL = max(dot(N, L), 0.0);
+    let NdotV = max(dot(N, V), 0.0);
+    let NdotH = max(dot(N, H), 0.0);
+    let LdotH = max(dot(L, H), 0.0);
+
+    let outParams = Disney(NdotL, NdotV, NdotH, LdotH, roughness);
+
+    // Calculate final color
+    float3 Cdlin = float3(pow(baseColor[0], 2.2), pow(baseColor[1], 2.2), pow(baseColor[2], 2.2));
+    float3 Cspec0 = lerp(specular * .08 * float3(1), Cdlin, metallic);
+    float3 brdfn = outParams.x * Cdlin * (1 - metallic) + outParams.y * lerp(Cspec0, float3(1), outParams.z) + outParams.w;
+    float3 colorh = max(brdfn * float3(NdotL), 0.0) * light.intensity * light.color;
+
+    analyticColor += (NdotL > 0.0 && NdotV > 0.0)? colorh : 0.0;
+  }
+
+  var mlpColor = float3(0.0, 0.0, 0.0);
+  for (var i = 0; i < uniforms.light_count; i++)
+  {
+    let light = uniforms.light[i];
+
+    let lightViewPosition = mul(uniforms.view, float4(light.position, 1.0)).xyz;
+    let L = normalize(lightViewPosition - input.viewPosition);
+    let H = normalize(L + V);
 
     let NdotL = max(dot(N, L), 0.0);
     let NdotV = max(dot(N, V), 0.0);
@@ -227,7 +255,7 @@ func fsMain(input: VertexOutput) -> FragmentOutput
       hiddenParams,
       params,
       uniforms.weight_offsets[2],
-      uniforms.bias_offsets[3],
+      uniforms.bias_offsets[2],
       CoopVecMatrixLayout::InferencingOptimal,
       CoopVecComponentType::Float16
     );
@@ -236,25 +264,38 @@ func fsMain(input: VertexOutput) -> FragmentOutput
     outputParams = rtxns::LinearOp<half, 4, 64>(
       hiddenParams,
       params,
-      uniforms.weight_offsets[4],
-      uniforms.bias_offsets[4],
+      uniforms.weight_offsets[3],
+      uniforms.bias_offsets[3],
       CoopVecMatrixLayout::InferencingOptimal,
       CoopVecComponentType::Float16
     );
-    outputParams = rtxns::sigmoid(outputParams);
+    outputParams = exp(outputParams);
 
+    let outParams = float4(outputParams[0], outputParams[1], outputParams[2], outputParams[3]);
 
     // Calculate final color
     float3 Cdlin = float3(pow(baseColor[0], 2.2), pow(baseColor[1], 2.2), pow(baseColor[2], 2.2));
     float3 Cspec0 = lerp(specular * .08 * float3(1), Cdlin, metallic);
-    float3 brdfn = outputParams[0] * Cdlin * (1 - metallic) + outputParams[1] * lerp(Cspec0, float3(1), outputParams[2]) + outputParams[3];
-    float3 colorh = brdfn * float3(NdotL) * light.intensity * light.color;
+    float3 brdfn = outParams.x * Cdlin * (1 - metallic) + outParams.y * lerp(Cspec0, float3(1), outParams.z) + outParams.w;
+    float3 colorh = max(brdfn * float3(NdotL), 0.0) * light.intensity * light.color;
 
-    color += colorh;
+    mlpColor += (NdotL > 0.0 && NdotV > 0.0)? colorh : 0.0;
   }
 
-  let linearColor = srgbToLinear(color);
+  let analyticColorLinear = srgbToLinear(analyticColor);
+  let mlpColorLinear = srgbToLinear(mlpColor);
+
+  let diffValue = length(mlpColorLinear - analyticColorLinear);
+  let signDiff = length(mlpColorLinear) > length(analyticColor) ? 1.0 : -1.0;
+
+  var diffColor = float3(0.0, 0.0, 0.0);
+  if (signDiff < 0.0) {
+    diffColor = float3(diffValue, 0.0, 0.0);
+  } else {
+    diffColor = float3(0.0, 0.0, diffValue);
+  }
+
   return {
-    { linearColor, 1.0 },
+    { diffColor, 1.0 },
   };
 }
