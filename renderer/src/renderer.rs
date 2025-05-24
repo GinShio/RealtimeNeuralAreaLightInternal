@@ -60,6 +60,7 @@ impl Renderer {
             scene::TriangleScene::new(&mut state, &mut texture_manager)?,
             scene::DamagedHelmetScene::new(&mut state, &mut texture_manager)?,
             scene::ColorTriangleScene::new(&mut state, &mut texture_manager)?,
+            scene::DisneyRtxnsScene::new(&mut state, &mut texture_manager)?,
         ];
 
         // Create pass

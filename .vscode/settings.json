@@ -26,6 +26,7 @@
     "numthreads",
     "numtide",
     "opengl",
+    "orthogonalize",
     "pkgs",
     "pname",
     "preds",

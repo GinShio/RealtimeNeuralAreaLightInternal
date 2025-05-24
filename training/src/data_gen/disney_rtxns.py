@@ -12,7 +12,7 @@ device = spy.create_device(
 )
 
 disneyModule = spy.Module.load_from_file(device, "disney-rtxns.slang")
-DisneyBRDF = disneyModule.DisneyBRDF
+DisneyBRDF = disneyModule.Disney
 
 
 def normalize(v):
@@ -41,43 +41,38 @@ def data_gen(
         buffer_outputs = []
         buffer_bytes = 0
         generated = 0
-        gen_batch_size = 4096
+        # gen_batch_size = 4096
+        gen_batch_size = 1 << 16
         chunk_size_bytes = 1024 * 1024  # 1MB
 
         while generated < n_samples:
             batch_n = min(gen_batch_size, n_samples - generated)
             # random parameters
-            base_color = np.random.rand(batch_n, 3)
             n_dot_l = np.random.rand(batch_n, 1)
             n_dot_v = np.random.rand(batch_n, 1)
             n_dot_h = np.random.rand(batch_n, 1)
             l_dot_h = np.random.rand(batch_n, 1)
-            metallic = np.random.rand(batch_n, 1)
             roughness = np.random.rand(batch_n, 1)
 
             # merge all inputs into a single array
             inputs = np.concatenate(
                 [
-                    # base_color.astype(np.float32),
                     n_dot_l.astype(np.float32),
                     n_dot_v.astype(np.float32),
                     n_dot_h.astype(np.float32),
                     l_dot_h.astype(np.float32),
                     roughness.astype(np.float32),
-                    # metallic.astype(np.float32),
                 ],
                 axis=1,
             )  # shape: (batch_n, 5)
 
             # Calculate BRDF using SlangPy
             outputs = DisneyBRDF(
-                # base_color.astype(np.float32),
                 n_dot_l.squeeze().astype(np.float32),
                 n_dot_v.squeeze().astype(np.float32),
                 n_dot_h.squeeze().astype(np.float32),
                 l_dot_h.squeeze().astype(np.float32),
                 roughness.squeeze().astype(np.float32),
-                # metallic.squeeze().astype(np.float32),
                 _result="numpy",
             )
             outputs = np.array(outputs)  # shape: (batch_n, 3)

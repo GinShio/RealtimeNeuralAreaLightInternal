@@ -26,6 +26,8 @@ fn compile_slang_shader(src: &Path, dst: &Path, stage: &str, entry_function: &st
             entry_function,
             "-stage",
             stage,
+            "-capability",
+            "SPV_NV_cooperative_vector",
             "-o",
             dst.to_str().unwrap(),
         ])
@@ -43,6 +45,24 @@ fn main() {
 
     let shader_dir = PathBuf::from("shaders");
     let entry_shaders = [
+        (
+            "tone_mapping.slang",
+            "tone_mapping.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "copy_to_swapchain.slang",
+            "copy_to_swapchain.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "copy_to_swapchain.slang",
+            "copy_to_swapchain.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
         (
             "scene/triangle.slang",
             "scene/triangle.vert.spv",
@@ -80,20 +100,38 @@ fn main() {
             "fsMain",
         ),
         (
-            "tone_mapping.slang",
-            "tone_mapping.comp.spv",
-            "compute",
-            "main",
-        ),
-        (
-            "copy_to_swapchain.slang",
-            "copy_to_swapchain.vert.spv",
+            "scene/disney_rtxns/mlp.slang",
+            "scene/disney_rtxns/mlp.vert.spv",
             "vertex",
             "vsMain",
         ),
         (
-            "copy_to_swapchain.slang",
-            "copy_to_swapchain.frag.spv",
+            "scene/disney_rtxns/mlp.slang",
+            "scene/disney_rtxns/mlp.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
+        (
+            "scene/disney_rtxns/analytic.slang",
+            "scene/disney_rtxns/analytic.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/disney_rtxns/analytic.slang",
+            "scene/disney_rtxns/analytic.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
+        (
+            "scene/disney_rtxns/diff.slang",
+            "scene/disney_rtxns/diff.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/disney_rtxns/diff.slang",
+            "scene/disney_rtxns/diff.frag.spv",
             "fragment",
             "fsMain",
         ),

@@ -6,10 +6,12 @@ use crate::renderer::{
 
 mod color_triangle;
 mod damaged_helmet;
+mod disney_rtxns;
 mod triangle;
 
 pub use color_triangle::ColorTriangleScene;
 pub use damaged_helmet::DamagedHelmetScene;
+pub use disney_rtxns::DisneyRtxnsScene;
 pub use triangle::TriangleScene;
 
 pub trait Scene {

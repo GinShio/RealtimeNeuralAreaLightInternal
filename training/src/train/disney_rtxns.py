@@ -7,73 +7,26 @@ import numpy as np
 from data_gen.disney_rtxns import DisneyBRDFDataset
 
 
-class FourierFeatureEmbedding(nn.Module):
-    def __init__(self, input_dim: int, num_frequencies: int, scale: float = 1.0):
-        """
-        Fourier Feature Embedding Layer
-
-        Parameters:
-            input_dim (int): 入力ベクトルの次元数
-            num_frequencies (int): 周波数の数（各次元に対するsin/cosのペア数）
-            scale (float): 周波数のスケーリングファクター（通常は1またはπなど）
-        """
-        super().__init__()
-        self.input_dim = input_dim
-        self.num_frequencies = num_frequencies
-        self.scale = scale
-
-        # 各次元に対して異なる周波数を割り当てる
-        frequencies = (
-            torch.linspace(1.0, 2.0 ** (num_frequencies - 1), num_frequencies) * scale
-        )
-        self.register_buffer("frequencies", frequencies)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Parameters:
-            x (Tensor): [batch_size, input_dim]のテンソル
-
-        Returns:
-            Tensor: [batch_size, input_dim * num_frequencies * 2]のFourier埋め込みテンソル
-        """
-        x = x.unsqueeze(-1)  # [B, input_dim, 1]
-        freqs = self.frequencies.to(x.device)  # [num_frequencies]
-        x_proj = x * freqs  # [B, input_dim, num_frequencies]
-
-        sin = torch.sin(2 * np.pi * x_proj)
-        cos = torch.cos(2 * np.pi * x_proj)
-        fourier_features = torch.cat(
-            [sin, cos], dim=-1
-        )  # [B, input_dim, num_frequencies * 2]
-
-        return fourier_features.view(x.shape[0], -1)  # フラット化
-
-
 # training MLP for DisneyBRDF
 def train(epochs):
-    # MLP definition: 9 -> 128 -> 128 -> 128 -> 3
+    # MLP definition: 5 -> 128 -> 128 -> 128 -> 4
     class DisneyMLP(nn.Module):
         def __init__(self):
             super().__init__()
-            self.ffe = FourierFeatureEmbedding(5, 6, scale=1.0)
-            self.fc1 = nn.Linear(5 * 6 * 2, 128)
+            self.fc1 = nn.Linear(5, 64)
             self.act1 = nn.ReLU()
-            self.fc2 = nn.Linear(128, 128)
+            self.fc2 = nn.Linear(64, 64)
             self.act2 = nn.ReLU()
-            self.fc3 = nn.Linear(128, 128)
+            self.fc3 = nn.Linear(64, 64)
             self.act3 = nn.ReLU()
-            self.fc4 = nn.Linear(128, 128)
-            self.act4 = nn.ReLU()
-            self.fc5 = nn.Linear(128, 4)
-            self.act5 = lambda x: x.exp()
+            self.fc4 = nn.Linear(64, 4)
+            self.act4 = lambda x: x.exp()
 
         def forward(self, x):
-            x = self.ffe(x)
             x = self.act1(self.fc1(x))
             x = self.act2(self.fc2(x))
             x = self.act3(self.fc3(x))
             x = self.act4(self.fc4(x))
-            x = self.act5(self.fc5(x))
             return x
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -152,8 +105,8 @@ def train(epochs):
 
     model_json = {
         "model": {
-            "input": 9,
-            "output": 3,
+            "input": 5,
+            "output": 4,
             "layers": [
                 layer_to_json(model.fc1),
                 {"type": "relu"},
@@ -162,8 +115,6 @@ def train(epochs):
                 layer_to_json(model.fc3),
                 {"type": "relu"},
                 layer_to_json(model.fc4),
-                {"type": "relu"},
-                layer_to_json(model.fc5),
                 {"type": "relu"},
             ],
         }

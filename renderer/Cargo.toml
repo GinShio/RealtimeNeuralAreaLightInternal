@@ -12,7 +12,7 @@ anyhow = "1.0.98"
 ash = "0.38.0"
 ash-window = "0.13.0"
 bytemuck = { version = "1.23.0", features = ["derive"] }
-glam = "0.30.3"
+glam = { version = "0.30.3", features = ["bytemuck"] }
 gltf = "1.4.1"
 gpu-allocator = "0.27.0"
 half = { version = "2.6.0", features = ["bytemuck"] }

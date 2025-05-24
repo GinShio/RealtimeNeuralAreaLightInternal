@@ -196,7 +196,7 @@ pub fn load_glb(
                     .map(|image_data| {
                         let width = image_data.width;
                         let height = image_data.height;
-                        let format = vk::Format::R8G8B8A8_SRGB;
+                        let format = vk::Format::R8G8B8A8_UNORM;
                         let mut data = Vec::with_capacity((width * height * 4) as usize);
                         match image_data.format {
                             gltf::image::Format::R8G8B8A8 => {
@@ -233,7 +233,7 @@ pub fn load_glb(
                     .map(|image_data| {
                         let width = image_data.width;
                         let height = image_data.height;
-                        let format = vk::Format::R8G8B8A8_SRGB;
+                        let format = vk::Format::R8G8B8A8_UNORM;
                         let mut data = Vec::with_capacity((width * height * 4) as usize);
                         match image_data.format {
                             gltf::image::Format::R8G8B8A8 => {
