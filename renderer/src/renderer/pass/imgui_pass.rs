@@ -42,6 +42,7 @@ impl ImGuiPass {
         &mut self,
         ui: &Ui,
         hidpi_factor: f32,
+        render_time: f32,
         scene_index: &mut usize,
         scenes: &mut Vec<Box<dyn Scene>>,
     ) {
@@ -59,6 +60,10 @@ impl ImGuiPass {
             );
 
         w.build(|| {
+            ui.text(format!("Render Time: {:.2} ms", render_time * 1000.0));
+            ui.text(format!("FPS: {:.2}", 1.0 / render_time));
+            ui.spacing();
+
             ui.combo_simple_string("Scene", scene_index, &scene_names);
 
             ui.spacing();

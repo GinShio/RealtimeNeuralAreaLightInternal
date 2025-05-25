@@ -47,10 +47,10 @@ impl CopyToSwapchainPass {
         let descriptor_pool = {
             let descriptor_pool_size = [vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(Renderer::MAX_FRAMES_IN_FLIGHT as u32)];
+                .descriptor_count(Renderer::IMAGE_COUNT as u32)];
             let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
                 .pool_sizes(&descriptor_pool_size)
-                .max_sets(Renderer::MAX_FRAMES_IN_FLIGHT as u32);
+                .max_sets(Renderer::IMAGE_COUNT as u32);
             unsafe {
                 state
                     .device
@@ -62,7 +62,7 @@ impl CopyToSwapchainPass {
             let set_layouts = [descriptor_set_layout]
                 .into_iter()
                 .cycle()
-                .take(Renderer::MAX_FRAMES_IN_FLIGHT)
+                .take(Renderer::IMAGE_COUNT)
                 .collect::<Vec<_>>();
             let descriptor_set_allocate_info = vk::DescriptorSetAllocateInfo::default()
                 .descriptor_pool(descriptor_pool)
@@ -234,7 +234,7 @@ impl CopyToSwapchainPass {
     /// Update render images.
     pub fn update_render_images(&mut self, state: &VulkanState, render_images: &RenderImages) {
         // Update descriptor sets
-        for i in 0..Renderer::MAX_FRAMES_IN_FLIGHT {
+        for i in 0..Renderer::IMAGE_COUNT {
             let input_image_info = [vk::DescriptorImageInfo::default()
                 .image_view(render_images.after_tone_mapping_image_views[i])
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)

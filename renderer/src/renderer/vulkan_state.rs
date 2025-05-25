@@ -361,7 +361,7 @@ impl VulkanState {
 
             let create_info = vk::SwapchainCreateInfoKHR::default()
                 .surface(surface)
-                .min_image_count(Renderer::MAX_FRAMES_IN_FLIGHT as u32)
+                .min_image_count(Renderer::IMAGE_COUNT as u32)
                 .image_format(format)
                 .image_color_space(vk::ColorSpaceKHR::SRGB_NONLINEAR)
                 .image_extent(extent)
@@ -479,7 +479,7 @@ impl VulkanState {
 
             let create_info = vk::SwapchainCreateInfoKHR::default()
                 .surface(self.surface)
-                .min_image_count(Renderer::MAX_FRAMES_IN_FLIGHT as u32)
+                .min_image_count(Renderer::IMAGE_COUNT as u32)
                 .image_format(format)
                 .image_color_space(vk::ColorSpaceKHR::SRGB_NONLINEAR)
                 .image_extent(extent)

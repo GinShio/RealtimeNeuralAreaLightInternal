@@ -26,7 +26,7 @@ impl RenderImages {
     pub fn new(state: &mut VulkanState) -> Result<Self> {
         // Create linear scene images
         let (linear_scene_images, linear_scene_image_views, linear_scene_image_allocations) = (0
-            ..Renderer::MAX_FRAMES_IN_FLIGHT)
+            ..Renderer::IMAGE_COUNT)
             .map(|_| {
                 // Create scene image
                 let image_create_info = vk::ImageCreateInfo::default()
@@ -161,7 +161,7 @@ impl RenderImages {
 
         // Create depth scene images
         let (depth_scene_images, depth_scene_image_views, depth_scene_image_allocations) = (0
-            ..Renderer::MAX_FRAMES_IN_FLIGHT)
+            ..Renderer::IMAGE_COUNT)
             .map(|_| {
                 // Create depth scene image
                 let image_create_info = vk::ImageCreateInfo::default()
@@ -299,7 +299,7 @@ impl RenderImages {
             after_tone_mapping_images,
             after_tone_mapping_image_views,
             after_tone_mapping_image_allocations,
-        ) = (0..Renderer::MAX_FRAMES_IN_FLIGHT)
+        ) = (0..Renderer::IMAGE_COUNT)
             .map(|_| {
                 // Create after tone mapping image
                 let image_create_info = vk::ImageCreateInfo::default()

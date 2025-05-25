@@ -118,7 +118,7 @@ pub struct DisneyRtxnsScene {
 impl DisneyRtxnsScene {
     pub fn new(state: &mut VulkanState, texture_manager: &mut TextureManager) -> Result<Box<Self>> {
         // Create uniform buffer
-        let (uniform_buffers, uniform_buffer_allocations) = (0..Renderer::MAX_FRAMES_IN_FLIGHT)
+        let (uniform_buffers, uniform_buffer_allocations) = (0..Renderer::IMAGE_COUNT)
             .map(|_| {
                 // Create uniform buffer
                 let uniform_buffer_create_info = vk::BufferCreateInfo::default()
@@ -177,10 +177,10 @@ impl DisneyRtxnsScene {
         let uniform_descriptor_pool = {
             let pool_sizes = [vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(Renderer::MAX_FRAMES_IN_FLIGHT as u32)];
+                .descriptor_count(Renderer::IMAGE_COUNT as u32)];
             let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
                 .pool_sizes(&pool_sizes)
-                .max_sets(Renderer::MAX_FRAMES_IN_FLIGHT as u32);
+                .max_sets(Renderer::IMAGE_COUNT as u32);
             unsafe {
                 state
                     .device
@@ -192,7 +192,7 @@ impl DisneyRtxnsScene {
             let set_layouts = [uniform_descriptor_set_layout]
                 .into_iter()
                 .cycle()
-                .take(Renderer::MAX_FRAMES_IN_FLIGHT)
+                .take(Renderer::IMAGE_COUNT)
                 .collect::<Vec<_>>();
             let descriptor_set_allocate_info = vk::DescriptorSetAllocateInfo::default()
                 .descriptor_pool(uniform_descriptor_pool)

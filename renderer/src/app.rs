@@ -41,7 +41,6 @@ impl ApplicationHandler for App {
         let attr = Window::default_attributes()
             .with_title("Vulkan: Test")
             .with_resizable(false)
-            .with_decorations(false)
             .with_inner_size(PhysicalSize::new(1280, 720));
         let window = event_loop
             .create_window(attr)

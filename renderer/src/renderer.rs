@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyhow::Result;
 use ash::vk;
 use imgui::{Context, DrawData, Ui};
@@ -40,10 +42,14 @@ pub struct Renderer {
     current_frame_index: u64,
 
     current_scene_index: usize,
+
+    render_time_counter: u64,
+    render_time: [f32; 100],
 }
 impl Renderer {
     /// Maximum number of frames in flight.
-    const MAX_FRAMES_IN_FLIGHT: usize = 3;
+    const MAX_FRAMES_IN_FLIGHT: usize = 1;
+    const IMAGE_COUNT: usize = Self::MAX_FRAMES_IN_FLIGHT + 1;
 
     /// Creates a new instance of the Renderer struct.
     pub fn new(window: &Window, imgui: &mut Context) -> Result<Self> {
@@ -142,6 +148,9 @@ impl Renderer {
             current_frame_index: 0,
 
             current_scene_index: 0,
+
+            render_time_counter: 0,
+            render_time: [0.0; 100],
         })
     }
 
@@ -200,9 +209,16 @@ impl Renderer {
 
     /// ImGui UI function.
     pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32) {
+        let mut render_time_sum = 0.0;
+        for i in 0..(100.min(self.render_time_counter) as usize) {
+            render_time_sum += self.render_time[i];
+        }
+        let render_time = render_time_sum / self.render_time_counter.min(100) as f32;
+
         self.imgui_pass.ui(
             ui,
             hidpi_factor,
+            render_time,
             &mut self.current_scene_index,
             &mut self.scenes,
         );
@@ -210,6 +226,8 @@ impl Renderer {
 
     /// Main render function.
     pub fn render(&mut self, imgui_draw_data: &DrawData) -> Result<()> {
+        let start_time = Instant::now();
+
         if self.state.swapchain.extent.width == 0 || self.state.swapchain.extent.height == 0 {
             std::thread::sleep(std::time::Duration::from_millis(16));
             return Ok(());
@@ -357,6 +375,10 @@ impl Renderer {
         self.current_frame_index =
             (self.current_frame_index + 1) % Self::MAX_FRAMES_IN_FLIGHT as u64;
 
+        self.render_time[(self.render_time_counter % 100) as usize] =
+            start_time.elapsed().as_secs_f32();
+        self.render_time_counter += 1;
+
         Ok(())
     }
 }
@@ -381,14 +403,11 @@ impl Drop for Renderer {
 
             self.render_images.destroy(&mut self.state);
 
-            for i in 0..Self::MAX_FRAMES_IN_FLIGHT {
-                self.state
-                    .device
-                    .destroy_semaphore(self.acquire_next_image_semaphores[i], None);
-                self.state
-                    .device
-                    .destroy_semaphore(self.render_finished_semaphores[i], None);
-                self.state.device.destroy_fence(self.fences[i], None);
+            for semaphore in &self.acquire_next_image_semaphores {
+                self.state.device.destroy_semaphore(*semaphore, None);
+            }
+            for semaphore in &self.render_finished_semaphores {
+                self.state.device.destroy_semaphore(*semaphore, None);
             }
         }
     }
