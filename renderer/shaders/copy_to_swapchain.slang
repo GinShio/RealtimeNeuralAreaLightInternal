@@ -1,6 +1,6 @@
 struct VertexInput
 {
-    uint index: SV_VertexID;
+    uint index : SV_VertexID;
 }
 
 struct VertexOutput
@@ -10,18 +10,18 @@ struct VertexOutput
 }
 
 [shader("vertex")]
-func vsMain(input: VertexInput) -> VertexOutput
+func vsMain(input: VertexInput)->VertexOutput
 {
     float2 positions[] = {
-      {-1.0, -1.0},
-      { 3.0, -1.0},
-      {-1.0, 3.0},
+        { -1.0, -1.0 },
+        { 3.0, -1.0 },
+        { -1.0, 3.0 },
     };
 
     float2 uvs[] = {
-      {0.0, 0.0},
-      {2.0, 0.0},
-      {0.0, 2.0},
+        { 0.0, 0.0 },
+        { 2.0, 0.0 },
+        { 0.0, 2.0 },
     };
 
     return {
@@ -39,9 +39,9 @@ struct FragmentOutput
 }
 
 [shader("fragment")]
-func fsMain(input: VertexOutput ) -> FragmentOutput
+func fsMain(input: VertexOutput)->FragmentOutput
 {
-  return {
-    inputImage.Sample(input.uv)
-  };
+    return {
+        inputImage.Sample(input.uv)
+    };
 }

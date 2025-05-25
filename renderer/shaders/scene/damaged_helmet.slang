@@ -1,13 +1,14 @@
 import "base.slang";
 
-struct PushConstants {
-  float4x4 model;
-  float4x4 view;
-  float4x4 projection;
-  uint samplerIndex;
-  uint baseColorIndex;
-  uint normalIndex;
-  uint metallicRoughnessIndex;
+struct PushConstants
+{
+    float4x4 model;
+    float4x4 view;
+    float4x4 projection;
+    uint samplerIndex;
+    uint baseColorIndex;
+    uint normalIndex;
+    uint metallicRoughnessIndex;
 }
 
 [[push_constant]]
@@ -15,92 +16,90 @@ PushConstants pc;
 
 struct VertexOutput
 {
-  float4 position : SV_POSITION;
-  float3 viewPosition : TEXCOORD0;
-  float3 viewNormal : TEXCOORD1;
-  float4 viewTangent : TEXCOORD2;
-  float2 uv : TEXCOORD3;
+    float4 position : SV_POSITION;
+    float3 viewPosition : TEXCOORD0;
+    float3 viewNormal : TEXCOORD1;
+    float4 viewTangent : TEXCOORD2;
+    float2 uv : TEXCOORD3;
 }
-
 
 float3x3 inverse3x3(float3x3 m)
 {
-  float a00 = m[0][0], a01 = m[0][1], a02 = m[0][2];
-  float a10 = m[1][0], a11 = m[1][1], a12 = m[1][2];
-  float a20 = m[2][0], a21 = m[2][1], a22 = m[2][2];
+    float a00 = m[0][0], a01 = m[0][1], a02 = m[0][2];
+    float a10 = m[1][0], a11 = m[1][1], a12 = m[1][2];
+    float a20 = m[2][0], a21 = m[2][1], a22 = m[2][2];
 
-  float det = a00 * (a11 * a22 - a12 * a21) -
-    a01 * (a10 * a22 - a12 * a20) +
-    a02 * (a10 * a21 - a11 * a20);
+    float det = a00 * (a11 * a22 - a12 * a21) -
+                a01 * (a10 * a22 - a12 * a20) +
+                a02 * (a10 * a21 - a11 * a20);
 
-  if (abs(det) < 1e-6) return float3x3(0.0); // 非正則行列
+    if (abs(det) < 1e-6)
+        return float3x3(0.0); // 非正則行列
 
-  float invDet = 1.0 / det;
+    float invDet = 1.0 / det;
 
-  return float3x3(
-    +(a11 * a22 - a12 * a21) * invDet,
-    -(a01 * a22 - a02 * a21) * invDet,
-    +(a01 * a12 - a02 * a11) * invDet,
+    return float3x3(
+        +(a11 * a22 - a12 * a21) * invDet,
+        -(a01 * a22 - a02 * a21) * invDet,
+        +(a01 * a12 - a02 * a11) * invDet,
 
-    -(a10 * a22 - a12 * a20) * invDet,
-    +(a00 * a22 - a02 * a20) * invDet,
-    -(a00 * a12 - a02 * a10) * invDet,
+        -(a10 * a22 - a12 * a20) * invDet,
+        +(a00 * a22 - a02 * a20) * invDet,
+        -(a00 * a12 - a02 * a10) * invDet,
 
-    +(a10 * a21 - a11 * a20) * invDet,
-    -(a00 * a21 - a01 * a20) * invDet,
-    +(a00 * a11 - a01 * a10) * invDet
-  );
+        +(a10 * a21 - a11 * a20) * invDet,
+        -(a00 * a21 - a01 * a20) * invDet,
+        +(a00 * a11 - a01 * a10) * invDet);
 }
 
-
 [shader("vertex")]
-func vsMain(input: VertexInput) -> VertexOutput
+func vsMain(input: VertexInput)->VertexOutput
 {
-  let viewModel = mul(pc.view, pc.model);
-  let viewModelIT = inverse3x3(transpose(float3x3(viewModel)));
+    let viewModel = mul(pc.view, pc.model);
+    let viewModelIT = inverse3x3(transpose(float3x3(viewModel)));
 
-  let viewPosition = mul(viewModel, float4(input.position, 1.0));
+    let viewPosition = mul(viewModel, float4(input.position, 1.0));
 
-  let viewNormal = normalize(mul(viewModelIT, input.normal));
+    let viewNormal = normalize(mul(viewModelIT, input.normal));
 
-  let viewTangent = normalize(mul(viewModelIT, input.tangent.xyz));
-  let viewTangentW = input.tangent.w;
+    let viewTangent = normalize(mul(viewModelIT, input.tangent.xyz));
+    let viewTangentW = input.tangent.w;
 
-  let uv = input.uv;
+    let uv = input.uv;
 
-  let position = mul(pc.projection, viewPosition);
+    let position = mul(pc.projection, viewPosition);
 
-  return {
-      position,
-      viewPosition.xyz,
-      viewNormal.xyz,
-      float4(viewTangent.xyz, viewTangentW),
-      uv,
-  };
+    return {
+        position,
+        viewPosition.xyz,
+        viewNormal.xyz,
+        float4(viewTangent.xyz, viewTangentW),
+        uv,
+    };
 }
 
 struct FragmentOutput
 {
-  float4 color : SV_TARGET;
+    float4 color : SV_TARGET;
 }
 
 [shader("fragment")]
-func fsMain(input: VertexOutput) -> FragmentOutput
+func fsMain(input: VertexOutput)->FragmentOutput
 {
-  let sampler = samplerList[pc.samplerIndex];
+    let sampler = samplerList[pc.samplerIndex];
 
-  float3 baseColor;
-  if (pc.baseColorIndex == 0xFFFFFFFF)
-  {
-    baseColor = float3(1.0, 0.0, 0.0);
-  }
-  else
-  {
-    let baseColorTexture = textures[pc.baseColorIndex];
-    baseColor = baseColorTexture.Sample(sampler, input.uv).rgb;
-  }
+    float3 baseColor;
+    if (pc.baseColorIndex == 0xFFFFFFFF)
+    {
+        baseColor = float3(1.0, 0.0, 0.0);
+    }
+    else
+    {
+        let baseColorTexture = textures[pc.baseColorIndex];
+        baseColor = baseColorTexture.Sample(sampler, input.uv).rgb;
+    }
 
-  return {
-    { baseColor, 1.0 },
-  };
+    return {
+        { baseColor, 1.0 },
+    };
 }

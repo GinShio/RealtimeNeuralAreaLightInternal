@@ -230,10 +230,10 @@ void main(uint3 tid: SV_DispatchThreadID)
         ExponentialAct<half, 4>());
 
     // 出力の勾配を計算
-    CoopVec<half, 4> lossGradient = { 0.0, 0.0, 0.0, 0.0 };
+    CoopVec<half, 4> lossGradient;
     for (uint j = 0; j < 4; ++j)
     {
-        lossGradient[j] += half((actualDisney[j] - output[j]) * (actualDisney[j] - output[j]) * (LOSS_SCALE / (uniforms.batchSize * 4)) * (COMPONENT_WEIGHTS[j]));
+        lossGradient[j] = half((actualDisney[j] - output[j]) * (actualDisney[j] - output[j]) * (LOSS_SCALE / (uniforms.batchSize * 4)) * (COMPONENT_WEIGHTS[j]));
     }
 
     // 微分呼び出し
