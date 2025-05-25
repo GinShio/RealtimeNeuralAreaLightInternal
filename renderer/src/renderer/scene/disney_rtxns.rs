@@ -465,7 +465,7 @@ impl DisneyRtxnsScene {
                 state.device.destroy_buffer(staging_buffer, None);
             }
 
-            // Return the vertex buffer and its memory
+            // Return the network buffer and its memory
             (network_buffer, network_buffer_allocation)
         };
 
