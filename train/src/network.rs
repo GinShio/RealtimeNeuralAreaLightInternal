@@ -299,9 +299,6 @@ impl TrainedNetwork {
             out_features.push(out_feature);
         }
 
-        println!("Weights: {:?}", weights);
-        println!("Biases: {:?}", biases);
-
         Ok(Self {
             weights,
             biases,
@@ -332,6 +329,7 @@ impl TrainedNetwork {
                 "out_features": out_features,
                 "weights": weights,
                 "bias": biases,
+                "type": "linear",
             }));
         }
         let model = json!({

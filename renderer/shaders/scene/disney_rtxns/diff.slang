@@ -225,13 +225,12 @@ func fsMain(input: VertexOutput) -> FragmentOutput
     let NdotH = max(dot(N, H), 0.0);
     let LdotH = max(dot(L, H), 0.0);
 
-    CoopVec<half, 5> inputParams;
+    float inputs[5] = {NdotL, NdotV, NdotH, LdotH, roughness};
+    CoopVec<half, 30> inputParams = rtxns::EncodeFrequency<half, 5>(inputs);
     CoopVec<half, 64> hiddenParams;
     CoopVec<half, 4> outputParams;
 
-    inputParams = { NdotL, NdotV, NdotH, LdotH, roughness };
-
-    hiddenParams = rtxns::LinearOp<half, 64, 5>(
+    hiddenParams = rtxns::LinearOp<half, 64, 30>(
       inputParams,
       params,
       uniforms.weight_offsets[0],

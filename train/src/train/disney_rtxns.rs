@@ -34,8 +34,8 @@ struct PushConstants {
 pub fn train(state: &mut VulkanState, epochs: u32) -> Result<()> {
     let batch_size = 1 << 16;
     let batch_count = 100;
-    let learning_rate = 0.001;
-    let dimensions = [5, 64, 64, 64, 4];
+    let learning_rate = 0.01;
+    let dimensions = [5 * 6, 32, 32, 32, 4];
 
     // Create network
     let network = Network::from_dimensions(&state.cooperative_vector_fn, &dimensions)?;
@@ -707,34 +707,36 @@ pub fn train(state: &mut VulkanState, epochs: u32) -> Result<()> {
             }
         }
 
-        // Barrier to ensure all writes are visible before copying
-        let buffer_memory_barriers = [vk::BufferMemoryBarrier2::default()
-            .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-            .dst_stage_mask(vk::PipelineStageFlags2::COPY)
-            .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-            .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
-            .buffer(network_params_buffer)
-            .offset(0)
-            .size(vk::WHOLE_SIZE)];
-        let dependency_info =
-            vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
-        unsafe {
-            state
-                .device
-                .cmd_pipeline_barrier2(command_buffer, &dependency_info);
-        }
+        if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
+            // Barrier to ensure all writes are visible before copying
+            let buffer_memory_barriers = [vk::BufferMemoryBarrier2::default()
+                .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                .dst_stage_mask(vk::PipelineStageFlags2::COPY)
+                .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
+                .buffer(network_params_buffer)
+                .offset(0)
+                .size(vk::WHOLE_SIZE)];
+            let dependency_info =
+                vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
+            unsafe {
+                state
+                    .device
+                    .cmd_pipeline_barrier2(command_buffer, &dependency_info);
+            }
 
-        // copy params to CPU buffer
-        unsafe {
-            state.device.cmd_copy_buffer(
-                command_buffer,
-                network_params_buffer,
-                network_params_cpu_buffer,
-                &[vk::BufferCopy::default()
-                    .src_offset(0)
-                    .dst_offset(0)
-                    .size(total_params_count * std::mem::size_of::<half::f16>() as u64)],
-            );
+            // copy params to CPU buffer
+            unsafe {
+                state.device.cmd_copy_buffer(
+                    command_buffer,
+                    network_params_buffer,
+                    network_params_cpu_buffer,
+                    &[vk::BufferCopy::default()
+                        .src_offset(0)
+                        .dst_offset(0)
+                        .size(total_params_count * std::mem::size_of::<half::f16>() as u64)],
+                );
+            }
         }
 
         // end command buffer
@@ -758,20 +760,22 @@ pub fn train(state: &mut VulkanState, epochs: u32) -> Result<()> {
                 .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())?;
         }
 
-        // copy data
-        let data = network_params_cpu_buffer_allocation
-            .mapped_slice()
-            .expect("Failed to map network params CPU buffer")
-            .to_vec();
+        if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
+            // copy data
+            let data = network_params_cpu_buffer_allocation
+                .mapped_slice()
+                .expect("Failed to map network params CPU buffer")
+                .to_vec();
 
-        let trained_network = TrainedNetwork::from_data(
-            &state.cooperative_vector_fn,
-            &data,
-            &network.weight_offsets,
-            &network.bias_offsets,
-            &dimensions,
-        )?;
-        trained_network.save_network("./network/disney-rtxns.json")?;
+            let trained_network = TrainedNetwork::from_data(
+                &state.cooperative_vector_fn,
+                &data,
+                &network.weight_offsets,
+                &network.bias_offsets,
+                &dimensions,
+            )?;
+            trained_network.save_network("./network/disney-rtxns.json")?;
+        }
     }
 
     // destroy resources
