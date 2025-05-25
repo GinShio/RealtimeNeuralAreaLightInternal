@@ -73,7 +73,6 @@ float3x3 inverse3x3(float3x3 m)
 
     if (abs(det) < 1e-6)
         return float3x3(0.0);
-    
 
     float invDet = 1.0 / det;
 
