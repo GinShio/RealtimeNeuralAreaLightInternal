@@ -409,6 +409,9 @@ impl Drop for Renderer {
             for semaphore in &self.render_finished_semaphores {
                 self.state.device.destroy_semaphore(*semaphore, None);
             }
+            for fence in &self.fences {
+                self.state.device.destroy_fence(*fence, None);
+            }
         }
     }
 }

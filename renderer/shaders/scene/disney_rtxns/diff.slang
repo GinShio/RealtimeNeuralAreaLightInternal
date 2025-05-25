@@ -228,10 +228,10 @@ func fsMain(input: VertexOutput)->FragmentOutput
 
         float inputs[5] = { NdotL, NdotV, NdotH, LdotH, roughness };
         CoopVec<half, 30> inputParams = rtxns::EncodeFrequency<half, 5>(inputs);
-        CoopVec<half, 64> hiddenParams;
+        CoopVec<half, 32> hiddenParams;
         CoopVec<half, 4> outputParams;
 
-        hiddenParams = rtxns::LinearOp<half, 64, 30>(
+        hiddenParams = rtxns::LinearOp<half, 32, 30>(
             inputParams,
             params,
             uniforms.weight_offsets[0],
@@ -240,7 +240,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
             CoopVecComponentType::Float16);
         hiddenParams = rtxns::relu(hiddenParams);
 
-        hiddenParams = rtxns::LinearOp<half, 64, 64>(
+        hiddenParams = rtxns::LinearOp<half, 32, 32>(
             hiddenParams,
             params,
             uniforms.weight_offsets[1],
@@ -249,7 +249,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
             CoopVecComponentType::Float16);
         hiddenParams = rtxns::relu(hiddenParams);
 
-        hiddenParams = rtxns::LinearOp<half, 64, 64>(
+        hiddenParams = rtxns::LinearOp<half, 32, 32>(
             hiddenParams,
             params,
             uniforms.weight_offsets[2],
@@ -258,7 +258,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
             CoopVecComponentType::Float16);
         hiddenParams = rtxns::relu(hiddenParams);
 
-        outputParams = rtxns::LinearOp<half, 4, 64>(
+        outputParams = rtxns::LinearOp<half, 4, 32>(
             hiddenParams,
             params,
             uniforms.weight_offsets[3],

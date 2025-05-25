@@ -22,21 +22,22 @@ impl Network {
         cols: u32,
     ) -> Result<u32> {
         let mut required_size = 0;
-        let stride = cols as u64 * std::mem::size_of::<f16>() as u64;
+        let src_stride = cols as u64 * std::mem::size_of::<f16>() as u64;
+        let dst_stride = rows as u64 * std::mem::size_of::<f16>() as u64;
 
         let info = cooperative_vector::ConvertCooperativeVectorMatrixInfoNV::default()
             .num_rows(rows)
             .num_columns(cols)
             .src_component_type(vk::ComponentTypeNV::FLOAT16)
             .src_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::RowMajor)
-            .src_stride(stride)
+            .src_stride(src_stride)
             .src_size(0)
             .src_data(vk::DeviceOrHostAddressConstKHR {
                 host_address: std::ptr::null(),
             })
             .dst_component_type(vk::ComponentTypeNV::FLOAT16)
             .dst_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::TrainingOptimal)
-            .dst_stride(stride)
+            .dst_stride(dst_stride)
             .dst_size(&mut required_size)
             .dst_data(vk::DeviceOrHostAddressKHR {
                 host_address: std::ptr::null_mut(),

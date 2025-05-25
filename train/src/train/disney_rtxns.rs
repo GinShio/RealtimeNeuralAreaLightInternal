@@ -1,5 +1,6 @@
 use anyhow::Result;
 use ash::vk;
+use rand::prelude::*;
 
 use crate::network::TrainedNetwork;
 use crate::utils::create_compute_pipeline;
@@ -597,11 +598,11 @@ pub fn train(state: &mut VulkanState, epochs: u32) -> Result<()> {
 
     // === training loop ===
 
+    let mut rng = rand::rng();
+
     // training loop
     for i in 0..epochs {
         println!("Epoch {}/{}", i + 1, epochs);
-
-        let seed = i as u64;
 
         // begin command buffer
         unsafe {
@@ -611,6 +612,8 @@ pub fn train(state: &mut VulkanState, epochs: u32) -> Result<()> {
         }
 
         for j in 0..batch_count {
+            let seed = rng.random();
+
             // training pass
             unsafe {
                 state.device.cmd_bind_pipeline(

@@ -20,7 +20,7 @@ import "disney";
 #define HIDDEN_NEURONS 32
 #define NUM_HIDDEN_LAYERS 3
 
-#define COMPONENT_WEIGHTS float4(1.f, 10.f, 1.f, 5.f)
+#define COMPONENT_WEIGHTS float4(1.0, 10.0, 1.0, 5.0)
 
 #define NUM_TRANSITIONS (NUM_HIDDEN_LAYERS + 1)
 #define NUM_TRANSITIONS_ALIGN4 ((NUM_TRANSITIONS + 3) / 4)
@@ -229,15 +229,20 @@ void main(uint3 tid: SV_DispatchThreadID)
         ReLUAct<half, 32>(),
         ExponentialAct<half, 4>());
 
+    float4 predictedDisney = { output[0], output[1], output[2], output[3] };
+
     // 出力の勾配を計算
     CoopVec<half, 4> lossGradient;
     for (uint j = 0; j < 4; ++j)
     {
-        lossGradient[j] = half((actualDisney[j] - output[j]) * (actualDisney[j] - output[j]) * (LOSS_SCALE / (uniforms.batchSize * 4)) * (COMPONENT_WEIGHTS[j]));
+        let scale = LOSS_SCALE / (uniforms.batchSize * 4) / (output[j] * output[j] + 0.01);
+        let deriv = 2.0 * (output[j] - actualDisney[j]);
+        lossGradient[j] = half(scale * deriv * (COMPONENT_WEIGHTS[j]));
     }
 
     // 微分呼び出し
-    bwd_diff(model)(inputPair, paramPair, offsets, act, finalAct, lossGradient);
+    bwd_diff(model)(inputPair, paramPair, offsets, act, finalAct,
+                    HCoopVec<4>(lossGradient[0], lossGradient[1], lossGradient[2], lossGradient[3]));
 }
 
 [Differentiable]
