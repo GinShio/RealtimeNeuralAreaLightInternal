@@ -112,35 +112,31 @@ impl Network {
         let mut json_data = Vec::new();
 
         for layer in layers {
-            if let Some(layer_type) = layer.get("type").and_then(|t| t.as_str()) {
-                if layer_type == "linear" {
-                    let in_features = layer
-                        .get("in_features")
-                        .and_then(|v| v.as_u64())
-                        .ok_or_else(|| anyhow!("Missing in_features"))?
-                        as u32;
-                    let out_features = layer
-                        .get("out_features")
-                        .and_then(|v| v.as_u64())
-                        .ok_or_else(|| anyhow!("Missing out_features"))?
-                        as u32;
-                    let weights = layer
-                        .get("weights")
-                        .and_then(|w| w.as_array())
-                        .ok_or_else(|| anyhow!("Missing weights"))?
-                        .iter()
-                        .map(|v| v.as_f64().unwrap() as f32)
-                        .collect::<Vec<f32>>();
-                    let biases = layer
-                        .get("bias")
-                        .and_then(|b| b.as_array())
-                        .ok_or_else(|| anyhow!("Missing bias"))?
-                        .iter()
-                        .map(|v| v.as_f64().unwrap() as f32)
-                        .collect::<Vec<f32>>();
-                    json_data.push((in_features, out_features, weights, biases));
-                }
-            }
+            let in_features = layer
+                .get("in_features")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow!("Missing in_features"))?
+                as u32;
+            let out_features = layer
+                .get("out_features")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow!("Missing out_features"))?
+                as u32;
+            let weights = layer
+                .get("weights")
+                .and_then(|w| w.as_array())
+                .ok_or_else(|| anyhow!("Missing weights"))?
+                .iter()
+                .map(|v| v.as_f64().unwrap() as f32)
+                .collect::<Vec<f32>>();
+            let biases = layer
+                .get("bias")
+                .and_then(|b| b.as_array())
+                .ok_or_else(|| anyhow!("Missing bias"))?
+                .iter()
+                .map(|v| v.as_f64().unwrap() as f32)
+                .collect::<Vec<f32>>();
+            json_data.push((in_features, out_features, weights, biases));
         }
 
         let mut offset = 0;

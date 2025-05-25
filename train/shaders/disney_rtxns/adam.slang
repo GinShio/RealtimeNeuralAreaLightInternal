@@ -45,18 +45,6 @@ void main(uint3 tid: SV_DispatchThreadID)
     if (i >= uniforms.paramsSize)
         return;
 
-    // if (i == 0) {
-    //     printf("learningRate = %f\n", uniforms.learningRate);
-    //     printf("currentStep = %u\n", pc.currentStep);
-
-    //     for (uint i = 0; i < 64; ++i)
-    //     {
-    //         printf("optimize phase gradient[%u] = %f\n", i, (float)gradients[i]);
-    //         printf("optimize phase moments1[%u] = %f\n", i, moments1[i]);
-    //         printf("optimize phase moments2[%u] = %f\n", i, moments2[i]);
-    //     }
-    // }
-
     float gradient = (float)gradients[i];
     gradients[i] = half(0.0);
 
@@ -67,11 +55,6 @@ void main(uint3 tid: SV_DispatchThreadID)
         optimizers::Adam optimizer = optimizers::Adam(moments1, moments2, uniforms.learningRate, LOSS_SCALE);
 
         float adjustedWeightbias = optimizer.step(weightbias, i, gradient, pc.currentStep + 1);
-
-        // if (i < 64)
-        // {
-        //     printf("optimize phase adjustedWeightbias[%u] = %f\n", i, adjustedWeightbias);
-        // }
 
         networkParamsFloat[i] = adjustedWeightbias;
         networkParams[i] = (half)adjustedWeightbias;
