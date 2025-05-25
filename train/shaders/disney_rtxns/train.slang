@@ -28,7 +28,8 @@ import "disney";
 using namespace rtxns;
 using namespace rtxns::mlp;
 
-struct PushConstants {
+struct PushConstants
+{
     uint64_t seed;
     uint currentStep;
 }
@@ -36,7 +37,8 @@ struct PushConstants {
 [[push_constant]]
 PushConstants pc;
 
-struct UniformBuffer {
+struct UniformBuffer
+{
     uint4 weightOffsets;
     uint4 biasOffsets;
     uint batchSize;
@@ -94,7 +96,6 @@ RWStructuredBuffer<half> gradients;
 //     // //----------- Training step
 //     // float params[INPUT_NEURONS] = {NdotL, NdotV, NdotH, LdotH, roughness};
 //     // CoopVec<half, 5> inputParams = { params[0], params[1], params[2], params[3], params[4] };
-
 
 //     // 入力ベクトル (5次元)
 //     CoopVec<half, 5> inputParams;
@@ -155,10 +156,8 @@ RWStructuredBuffer<half> gradients;
 //     }
 // }
 
-
-
 [numthreads(64, 1, 1)]
-void main(uint3 tid : SV_DispatchThreadID)
+void main(uint3 tid: SV_DispatchThreadID)
 {
     uint batchSize = uniforms.batchSize;
     uint i = tid.x;
@@ -172,29 +171,29 @@ void main(uint3 tid : SV_DispatchThreadID)
     // L is arbitrary, but (N,L) >= 0 => L.z > 0, so generate random L in XZ plane's first quadrant
     float3 L;
     L.y = 0.f;
-    sincos(rng.nextFloat()*PI/2, L.z, L.x);
+    sincos(rng.nextFloat() * PI / 2, L.z, L.x);
 
     // V is random direction, but (N,V) >= 0 => V.z > 0
     float sa, ca; // Azimuth [-PI/2,PI/2]
     sincos(-PI + 2 * PI * rng.nextFloat(), sa, ca);
     float se, ce; // Elevation [0,PI/2]
-    sincos(PI/2 * rng.nextFloat(), se, ce);
-    float3 V = float3(ce*ca, ce*sa, se);
+    sincos(PI / 2 * rng.nextFloat(), se, ce);
+    float3 V = float3(ce * ca, ce * sa, se);
 
     float NdotL = L.z;
     float NdotV = V.z;
 
-    float3 H = normalize(L+V);
+    float3 H = normalize(L + V);
     float NdotH = H.z;
-    float LdotH = dot(L,H);
+    float LdotH = dot(L, H);
 
-    float roughness = rng.nextFloat()*0.7f+0.3f;
+    float roughness = rng.nextFloat() * 0.7f + 0.3f;
 
     //----------- Calculate core shader part DIRECTLY
     float4 actualDisney = Disney(NdotL, NdotV, NdotH, LdotH, roughness);
 
     //----------- Training step
-    float inputParams[5] = {NdotL, NdotV, NdotH, LdotH, roughness};
+    float inputParams[5] = { NdotL, NdotV, NdotH, LdotH, roughness };
     CoopVec<half, 30> input = rtxns::EncodeFrequency<half, 5>(inputParams);
 
     // データバッファ
@@ -228,19 +227,18 @@ void main(uint3 tid : SV_DispatchThreadID)
         params,
         offsets,
         ReLUAct<half, 32>(),
-        ExponentialAct<half, 4>()
-    );
+        ExponentialAct<half, 4>());
 
     // 出力の勾配を計算
-    CoopVec<half, 4> lossGradient;
-    for (uint j = 0; j < 4; ++j) {
-        lossGradient[j] = (actualDisney[j] - output[j]) * (actualDisney[j] - output[j]) * half(LOSS_SCALE / (uniforms.batchSize * 4)) * COMPONENT_WEIGHTS[j];
+    CoopVec<half, 4> lossGradient = { 0.0, 0.0, 0.0, 0.0 };
+    for (uint j = 0; j < 4; ++j)
+    {
+        lossGradient[j] += half((actualDisney[j] - output[j]) * (actualDisney[j] - output[j]) * (LOSS_SCALE / (uniforms.batchSize * 4)) * (COMPONENT_WEIGHTS[j]));
     }
 
     // 微分呼び出し
     bwd_diff(model)(inputPair, paramPair, offsets, act, finalAct, lossGradient);
 }
-
 
 [Differentiable]
 CoopVec<half, 4> model<Act : IActivation<half, 32>, FinalAct : IActivation<half, 4>>(
@@ -248,8 +246,7 @@ CoopVec<half, 4> model<Act : IActivation<half, 32>, FinalAct : IActivation<half,
     MatrixBiasBuffer<half> parameters,
     uint2 layerOffsets[4],
     no_diff Act act,
-    no_diff FinalAct finalAct
-)
+    no_diff FinalAct finalAct)
 {
     let matrixLayout = CoopVecMatrixLayout::TrainingOptimal;
     let componentType = CoopVecComponentType::Float16;
@@ -257,7 +254,7 @@ CoopVec<half, 4> model<Act : IActivation<half, 32>, FinalAct : IActivation<half,
     var params = act.eval(LinearOp<half, 32, 30>(inputParams, parameters, layerOffsets[0], matrixLayout, componentType));
 
     [ForceUnroll]
-    for(int i = 1; i < 3; ++i)
+    for (int i = 1; i < 3; ++i)
         params = act.eval(LinearOp<half, 32, 32>(params, parameters, layerOffsets[i], matrixLayout, componentType));
 
     return finalAct.eval(LinearOp<half, 4, 32>(params, parameters, layerOffsets[3], matrixLayout, componentType));
@@ -280,7 +277,6 @@ CoopVec<half, 4> model<Act : IActivation<half, 32>, FinalAct : IActivation<half,
 
 //     return finalAct.eval(LinearOp<T, OUTPUTS, HIDDEN>(params, parameters, layerOffsets[HIDDEN_LAYERS], matrixLayout, componentType));
 // }
-
 
 // [numthreads(32, 1, 1)]
 // void main(uint3 tid : SV_DispatchThreadID)
@@ -309,8 +305,6 @@ CoopVec<half, 4> model<Act : IActivation<half, 32>, FinalAct : IActivation<half,
 //     // 各スレッドが呼ぶ（前提：スレッドごとに責任を持つユニットが割り当てられる想定）
 //     coopVecReduceSumAccumulate(gradOutput, gradients, biasOffset);
 
-
-
 //     GroupMemoryBarrierWithGroupSync();
 
 //     if (i == 0) {
@@ -323,9 +317,6 @@ CoopVec<half, 4> model<Act : IActivation<half, 32>, FinalAct : IActivation<half,
 //         printf("gradient[%u] = %f\n", i, gradients[i]);
 //     }
 // }
-
-
-
 
 // // Helper macro to expand the register and space macros before concatenating tokens.
 // // Declares a register space explicitly on DX12 and Vulkan, skips it on DX11.
@@ -344,7 +335,6 @@ CoopVec<half, 4> model<Act : IActivation<half, 32>, FinalAct : IActivation<half,
 
 // StructuredBuffer<half> gMLPParams               : REGISTER_SRV(1, 0);
 // RWStructuredBuffer<half> gMLPParamsGradients    : REGISTER_UAV(2, 0);
-
 
 // // [[vk::binding(1)]]
 // // StructuredBuffer<half> gMLPParams;
@@ -408,7 +398,6 @@ CoopVec<half, 4> model<Act : IActivation<half, 32>, FinalAct : IActivation<half,
 //     float4 lossGradient = rtxns::mlp::L2Relative<float, 4>.deriv(actualDisney, predictedDisney, float4(LOSS_SCALE / (uniforms.batchSize * 4)) * COMPONENT_WEIGHTS);
 
 //     model.backward(inputParams, hiddenActivation, finalActivation, rtxns::HCoopVec<OUTPUT_NEURONS>(lossGradient[0], lossGradient[1], lossGradient[2], lossGradient[3]));
-
 
 //     GroupMemoryBarrierWithGroupSync();
 

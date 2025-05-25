@@ -1,17 +1,19 @@
-struct PushConstants {
-  uint64_t seed;
-  uint currentStep;
+struct PushConstants
+{
+    uint64_t seed;
+    uint currentStep;
 }
 
 [[push_constant]]
 PushConstants pc;
 
-struct UniformBuffer {
-  uint4 weightOffsets;
-  uint4 biasOffsets;
-  uint batchSize;
-  uint paramsSize;
-  float learningRate;
+struct UniformBuffer
+{
+    uint4 weightOffsets;
+    uint4 biasOffsets;
+    uint batchSize;
+    uint paramsSize;
+    float learningRate;
 }
 
 [[vk::binding(0)]]

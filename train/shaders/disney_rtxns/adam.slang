@@ -2,7 +2,8 @@ import "../rtxns/Optimizers";
 
 #define LOSS_SCALE 128.0
 
-struct PushConstants {
+struct PushConstants
+{
     uint64_t seed;
     uint currentStep;
 }
@@ -10,12 +11,13 @@ struct PushConstants {
 [[push_constant]]
 PushConstants pc;
 
-struct UniformBuffer {
-  uint4 weightOffsets;
-  uint4 biasOffsets;
-  uint batchSize;
-  uint paramsSize;
-  float learningRate;
+struct UniformBuffer
+{
+    uint4 weightOffsets;
+    uint4 biasOffsets;
+    uint batchSize;
+    uint paramsSize;
+    float learningRate;
 }
 
 [[vk::binding(0)]]
@@ -72,6 +74,6 @@ void main(uint3 tid: SV_DispatchThreadID)
         // }
 
         networkParamsFloat[i] = adjustedWeightbias;
-        networkParams[i] = (half) adjustedWeightbias;
+        networkParams[i] = (half)adjustedWeightbias;
     }
 }
