@@ -1,6 +1,9 @@
 use ash::vk;
-use gpu_allocator::MemoryLocation;
-use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme};
+use gpu_allocator::{
+    MemoryLocation,
+    vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
+};
+use image::{DynamicImage, imageops::FilterType};
 
 use crate::vulkan_state::VulkanState;
 
@@ -8,6 +11,7 @@ pub struct Texture {
     pub image: vk::Image,
     pub image_view: vk::ImageView,
     pub allocation: Option<Allocation>,
+    pub width: u32, // mip0のwidth
 }
 impl Texture {
     pub fn destroy(&mut self, state: &mut VulkanState) {
@@ -32,14 +36,69 @@ struct MipmapPushConstant {
 
 pub fn create_texture_with_mipmap(
     state: &mut VulkanState,
+    mip0_width: u32,
     width: u32,
     height: u32,
     format: vk::Format,
     data: &[u8],
 ) -> Texture {
-    use std::cmp::max;
+    // Create DynamicImage from vk::Format
+    let img = match format {
+        vk::Format::R8G8B8A8_UNORM | vk::Format::R8G8B8A8_SRGB => {
+            image::RgbaImage::from_raw(width, height, data.to_vec())
+                .map(DynamicImage::ImageRgba8)
+                .expect("Invalid RGBA8 image")
+        }
+        vk::Format::R8G8B8_UNORM | vk::Format::R8G8B8_SRGB => {
+            image::RgbImage::from_raw(width, height, data.to_vec())
+                .map(DynamicImage::ImageRgb8)
+                .expect("Invalid RGB8 image")
+        }
+        vk::Format::R16G16B16A16_UNORM => {
+            let raw: Vec<u16> = data
+                .chunks_exact(2)
+                .map(|b| u16::from_le_bytes([b[0], b[1]]))
+                .collect();
+            image::ImageBuffer::<image::Rgba<u16>, _>::from_raw(width, height, raw)
+                .map(DynamicImage::ImageRgba16)
+                .expect("Invalid RGBA16 image")
+        }
+        vk::Format::R32G32B32A32_SFLOAT => {
+            let raw: Vec<f32> = data
+                .chunks_exact(4)
+                .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                .collect();
+            image::ImageBuffer::<image::Rgba<f32>, _>::from_raw(width, height, raw)
+                .map(DynamicImage::ImageRgba32F)
+                .expect("Invalid RGBA32F image")
+        }
+        _ => image::load_from_memory(data).expect("Failed to decode image"),
+    };
 
-    let mip_levels = (max(width, height) as f32).log2().floor() as u32 + 1;
+    // Resize to mip0_width x mip0_width
+    let resized = img.resize_exact(mip0_width, mip0_width, FilterType::Lanczos3);
+
+    // Convert resized image to byte array for Vulkan
+    let resized_data = match &resized {
+        DynamicImage::ImageRgba8(img) => img.as_raw().clone(),
+        DynamicImage::ImageRgb8(img) => {
+            let rgba_img = DynamicImage::ImageRgb8(img.clone()).to_rgba8();
+            rgba_img.as_raw().clone()
+        }
+        DynamicImage::ImageRgba16(img) => {
+            let raw: &[u8] = bytemuck::cast_slice(img.as_raw());
+            raw.to_vec()
+        }
+        DynamicImage::ImageRgba32F(img) => {
+            let raw: &[u8] = bytemuck::cast_slice(img.as_raw());
+            raw.to_vec()
+        }
+        _ => panic!("Unsupported image format for mipmap generation"),
+    };
+
+    let width = mip0_width;
+    let height = mip0_width;
+    let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
 
     // Create vk::Image
     let image_create_info = vk::ImageCreateInfo::default()
@@ -113,8 +172,8 @@ pub fn create_texture_with_mipmap(
         }
     };
 
-    // Prepare staging buffer
-    let buffer_size = data.len() as vk::DeviceSize;
+    // Prepare staging buffer using final_data
+    let buffer_size = resized_data.len() as vk::DeviceSize;
     let staging_buffer_info = vk::BufferCreateInfo::default()
         .flags(vk::BufferCreateFlags::empty())
         .size(buffer_size)
@@ -148,11 +207,11 @@ pub fn create_texture_with_mipmap(
             .unwrap();
     }
 
-    // Copy data to staging buffer
+    // Write resized_data to staging buffer
     staging_allocation
         .mapped_slice_mut()
         .expect("Failed to map staging buffer memory")
-        .copy_from_slice(data);
+        .copy_from_slice(&resized_data);
 
     // Copy staging buffer to image mip0
     let cmd = state.begin_single_time_commands();
@@ -186,7 +245,7 @@ pub fn create_texture_with_mipmap(
         );
     }
 
-    // buffer copy
+    // Buffer copy
     let buffer_image_copy = vk::BufferImageCopy::default()
         .buffer_offset(0)
         .buffer_row_length(0)
@@ -422,5 +481,6 @@ pub fn create_texture_with_mipmap(
         image,
         image_view,
         allocation: Some(allocation),
+        width,
     }
 }
