@@ -11,7 +11,8 @@ pub struct Texture {
     pub image: vk::Image,
     pub image_view: vk::ImageView,
     pub allocation: Option<Allocation>,
-    pub width: u32, // mip0のwidth
+    #[allow(dead_code)]
+    pub width: u32,
 }
 impl Texture {
     pub fn destroy(&mut self, state: &mut VulkanState) {
@@ -340,6 +341,39 @@ pub fn create_texture_with_mipmap(
         mip_image_views.push(image_view);
     }
 
+    // Image layout transition: UNDEFINED -> GENERAL for all mip levels
+    {
+        let cmd = state.begin_single_time_commands();
+        let barrier = vk::ImageMemoryBarrier::default()
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE)
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .new_layout(vk::ImageLayout::GENERAL)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(image)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(mip_levels)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            );
+        unsafe {
+            state.device.cmd_pipeline_barrier(
+                cmd,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[barrier],
+            );
+        }
+        state.end_single_time_commands(cmd);
+    }
+
     // Descriptor set layout for 2 storage images (input/output)
     let bindings = [
         vk::DescriptorSetLayoutBinding::default()
@@ -464,6 +498,39 @@ pub fn create_texture_with_mipmap(
 
         src_width = (src_width / 2).max(1);
         src_height = (src_height / 2).max(1);
+    }
+
+    // Transition image layout for shader read
+    {
+        let cmd = state.begin_single_time_commands();
+        let barrier = vk::ImageMemoryBarrier::default()
+            .src_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .old_layout(vk::ImageLayout::GENERAL)
+            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(image)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(mip_levels)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            );
+        unsafe {
+            state.device.cmd_pipeline_barrier(
+                cmd,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[barrier],
+            );
+        }
+        state.end_single_time_commands(cmd);
     }
 
     // Cleanup

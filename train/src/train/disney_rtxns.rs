@@ -38,7 +38,7 @@ pub fn train(state: &mut VulkanState, epochs: u32) -> Result<()> {
     let batch_size = 1 << 16;
     let batch_count = 100;
     let learning_rate = 0.01;
-    let dimensions = [5 * 6, 32, 32, 32, 4];
+    let dimensions = [(5 * 6, 32), (32, 32), (32, 32), (32, 4)];
 
     // Create network
     let network = Network::from_dimensions(&state.cooperative_vector_fn, &dimensions)?;

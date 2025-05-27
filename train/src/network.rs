@@ -95,7 +95,7 @@ impl Network {
 
     pub fn from_dimensions(
         cooperative_vector_fn: &cooperative_vector::Device,
-        dimensions: &[u32],
+        dimensions: &[(u32, u32)],
     ) -> Result<Self> {
         let dimensions = dimensions.iter().copied().collect::<Vec<_>>();
 
@@ -104,9 +104,9 @@ impl Network {
         let mut weight_offsets = vec![];
         let mut bias_sizes = vec![];
         let mut bias_offsets = vec![];
-        for item in dimensions.windows(2) {
-            let in_features = item[0];
-            let out_features = item[1];
+        for item in &dimensions {
+            let in_features = item.0;
+            let out_features = item.1;
 
             let weight_size =
                 Self::query_matrix_byte_size(cooperative_vector_fn, out_features, in_features)?;
@@ -127,9 +127,9 @@ impl Network {
         let mut rng = rand::rng();
 
         let mut data = vec![0u8; offset as usize];
-        for (i, item) in dimensions.windows(2).enumerate() {
-            let in_feature = item[0];
-            let out_feature = item[1];
+        for (i, item) in dimensions.iter().enumerate() {
+            let in_feature = item.0;
+            let out_feature = item.1;
 
             let std = (2.0 / in_feature as f32).sqrt();
             let weights: Vec<f32> = (0..(in_feature as usize * out_feature as usize))
@@ -262,16 +262,16 @@ impl TrainedNetwork {
         data: &[u8],
         weight_offsets: &[u32],
         bias_offsets: &[u32],
-        dimensions: &[u32],
+        dimensions: &[(u32, u32)],
     ) -> Result<Self> {
         let mut weights = vec![];
         let mut biases = vec![];
         let mut in_features = vec![];
         let mut out_features = vec![];
 
-        for (i, item) in dimensions.windows(2).enumerate() {
-            let in_feature = item[0];
-            let out_feature = item[1];
+        for (i, item) in dimensions.iter().enumerate() {
+            let in_feature = item.0;
+            let out_feature = item.1;
 
             let weight_size =
                 Self::query_matrix_byte_size(cooperative_vector_fn, out_feature, in_feature)?;

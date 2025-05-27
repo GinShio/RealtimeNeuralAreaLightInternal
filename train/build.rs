@@ -69,6 +69,24 @@ fn main() {
             "compute",
             "main",
         ),
+        (
+            "disney_rtnam/init_1st.slang",
+            "disney_rtnam/init_1st.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "disney_rtnam/train_1st.slang",
+            "disney_rtnam/train_1st.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "disney_rtnam/adam_1st.slang",
+            "disney_rtnam/adam_1st.comp.spv",
+            "compute",
+            "main",
+        ),
     ];
 
     // Watch all .slang files in the shader directory

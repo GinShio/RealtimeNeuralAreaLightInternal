@@ -11,7 +11,7 @@ mod vulkan_state;
 struct Args {
     #[arg(short, long)]
     scene: String,
-    #[arg(short, long, default_value_t = 10000)]
+    #[arg(short, long, default_value_t = 2000)]
     epochs: u32,
 }
 
@@ -26,6 +26,14 @@ fn main() -> Result<()> {
     match args.scene.as_str() {
         "disney-rtxns" => {
             train::disney_rtxns::train(&mut vulkan_state, args.epochs)?;
+        }
+        "disney-rtnam" => {
+            train::disney_rtnam::train(
+                &mut vulkan_state,
+                "assets/DamagedHelmet.glb",
+                args.epochs,
+                1024,
+            )?;
         }
         _ => {
             println!("Unknown scene: {}", args.scene);

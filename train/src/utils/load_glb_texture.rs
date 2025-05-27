@@ -1,6 +1,6 @@
 use std::path::Path as FsPath;
 
-use gltf::image::Data as GltfImageData;
+use ash::vk;
 
 use crate::{
     utils::{Texture, create_texture_with_mipmap},
@@ -9,8 +9,8 @@ use crate::{
 
 pub struct GlbTexture {
     pub base_color: Texture,
-    pub metallic_roughness: Option<Texture>,
-    pub normal: Option<Texture>,
+    pub metallic_roughness: Texture,
+    pub normal: Texture,
 }
 
 /// Load baseColor, metallic_roughness, and normal textures from a GLB file,
@@ -42,49 +42,81 @@ pub fn load_glb_texture(
 
     let normal_tex_index = material.normal_texture().map(|info| info.texture().index());
 
-    // Convert GLTF image format to Vulkan format
-    fn gltf_format_to_vk_format(fmt: gltf::image::Format) -> ash::vk::Format {
-        match fmt {
-            gltf::image::Format::R8G8B8A8 => ash::vk::Format::R8G8B8A8_UNORM,
-            gltf::image::Format::R8G8B8 => ash::vk::Format::R8G8B8_UNORM,
-            gltf::image::Format::R16G16B16A16 => ash::vk::Format::R16G16B16A16_UNORM,
-            gltf::image::Format::R32G32B32A32FLOAT => ash::vk::Format::R32G32B32A32_SFLOAT,
-            _ => panic!("Unsupported GLTF image format: {:?}", fmt),
-        }
-    }
-
-    // Helper to create a Vulkan texture from a GLTF image
-    fn create_vk_texture_from_gltf_image(
-        state: &mut VulkanState,
-        gltf_image: &GltfImageData,
-        mip0_width: u32,
-    ) -> Texture {
-        let vk_format = gltf_format_to_vk_format(gltf_image.format);
-        crate::utils::create_texture_with_mipmap(
-            state,
-            mip0_width,
-            gltf_image.width,
-            gltf_image.height,
-            vk_format,
-            &gltf_image.pixels,
-        )
-    }
-
+    // Get the first image from the GLB
     // baseColor
     let base_color = base_color_tex_index
         .and_then(|idx| images.get(idx))
-        .map(|img| create_vk_texture_from_gltf_image(state, img, width))
+        .map(|img| {
+            let data = img
+                .pixels
+                .chunks(3)
+                .flat_map(|p| {
+                    let r = p[0];
+                    let g = p[1];
+                    let b = p[2];
+                    vec![r, g, b, 255]
+                })
+                .collect::<Vec<u8>>();
+            create_texture_with_mipmap(
+                state,
+                width,
+                img.width,
+                img.height,
+                vk::Format::R8G8B8A8_UNORM,
+                &data,
+            )
+        })
         .expect("No baseColor texture found");
 
     // metallic_roughness
     let metallic_roughness = metallic_roughness_tex_index
         .and_then(|idx| images.get(idx))
-        .map(|img| create_vk_texture_from_gltf_image(state, img, width));
+        .map(|img| {
+            let data = img
+                .pixels
+                .chunks(3)
+                .flat_map(|p| {
+                    let r = p[0];
+                    let g = p[1];
+                    let b = p[2];
+                    vec![r, g, b, 255]
+                })
+                .collect::<Vec<u8>>();
+            create_texture_with_mipmap(
+                state,
+                width,
+                img.width,
+                img.height,
+                vk::Format::R8G8B8A8_UNORM,
+                &data,
+            )
+        })
+        .expect("No metallic_roughness texture found");
 
     // normal
     let normal = normal_tex_index
         .and_then(|idx| images.get(idx))
-        .map(|img| create_vk_texture_from_gltf_image(state, img, width));
+        .map(|img| {
+            let data = img
+                .pixels
+                .chunks(3)
+                .flat_map(|p| {
+                    let r = p[0];
+                    let g = p[1];
+                    let b = p[2];
+                    vec![r, g, b, 255]
+                })
+                .collect::<Vec<u8>>();
+            create_texture_with_mipmap(
+                state,
+                width,
+                img.width,
+                img.height,
+                vk::Format::R8G8B8A8_UNORM,
+                &data,
+            )
+        })
+        .expect("No normal texture found");
 
     GlbTexture {
         base_color,
