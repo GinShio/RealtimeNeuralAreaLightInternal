@@ -13,38 +13,36 @@ pub struct GlbTexture {
     pub normal: Option<Texture>,
 }
 
-/// GLBファイルからbaseColor, metallic_roughness, normalのテクスチャを読み込み、
-/// mipmap付きで返す
+/// Load baseColor, metallic_roughness, and normal textures from a GLB file,
+/// and return them with mipmaps.
 pub fn load_glb_texture(
     state: &mut VulkanState,
     path: impl AsRef<FsPath>,
     width: u32,
 ) -> GlbTexture {
-    // gltf::importでGLBを読み込む
+    // Load GLB using gltf::import
     let (document, _buffers, images) = gltf::import(path).expect("Failed to import GLB");
 
-    // マテリアルからテクスチャindexを取得
+    // Get the first material from the GLB
     let material = document
         .materials()
         .next()
         .expect("No material found in GLB");
 
-    // baseColor
+    // Get texture indices from the material
     let base_color_tex_index = material
         .pbr_metallic_roughness()
         .base_color_texture()
         .map(|info| info.texture().index());
 
-    // metallic_roughness
     let metallic_roughness_tex_index = material
         .pbr_metallic_roughness()
         .metallic_roughness_texture()
         .map(|info| info.texture().index());
 
-    // normal
     let normal_tex_index = material.normal_texture().map(|info| info.texture().index());
 
-    // Gltf format -> vk::Format
+    // Convert GLTF image format to Vulkan format
     fn gltf_format_to_vk_format(fmt: gltf::image::Format) -> ash::vk::Format {
         match fmt {
             gltf::image::Format::R8G8B8A8 => ash::vk::Format::R8G8B8A8_UNORM,
@@ -55,6 +53,7 @@ pub fn load_glb_texture(
         }
     }
 
+    // Helper to create a Vulkan texture from a GLTF image
     fn create_vk_texture_from_gltf_image(
         state: &mut VulkanState,
         gltf_image: &GltfImageData,
