@@ -1,3 +1,5 @@
+//! Based on an RTXNS ShaderTraining sample
+
 use anyhow::Result;
 use ash::vk;
 use rand::prelude::*;

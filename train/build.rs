@@ -46,6 +46,12 @@ fn main() {
     let shader_dir = PathBuf::from("shaders");
     let entry_shaders = [
         (
+            "utils/generate_mipmap.slang",
+            "utils/generate_mipmap.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
             "disney_rtxns/init.slang",
             "disney_rtxns/init.comp.spv",
             "compute",

@@ -327,6 +327,42 @@ impl VulkanState {
         })
     }
 
+    /// Begin a single-use command buffer.
+    pub fn begin_single_time_commands(&self) -> vk::CommandBuffer {
+        let alloc_info = vk::CommandBufferAllocateInfo::default()
+            .command_pool(self.command_pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+        let command_buffers = unsafe { self.device.allocate_command_buffers(&alloc_info).unwrap() };
+        let command_buffer = command_buffers[0];
+
+        let begin_info = vk::CommandBufferBeginInfo::default()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+        unsafe {
+            self.device
+                .begin_command_buffer(command_buffer, &begin_info)
+                .unwrap();
+        }
+        command_buffer
+    }
+
+    /// End and submit a single-use command buffer, then free it.
+    pub fn end_single_time_commands(&self, command_buffer: vk::CommandBuffer) {
+        unsafe {
+            self.device.end_command_buffer(command_buffer).unwrap();
+
+            let submit_info =
+                vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&command_buffer));
+            self.device
+                .queue_submit(self.queue, &[submit_info], vk::Fence::null())
+                .unwrap();
+            self.device.queue_wait_idle(self.queue).unwrap();
+
+            self.device
+                .free_command_buffers(self.command_pool, &[command_buffer]);
+        }
+    }
+
     /// Get a MutexGuard to the allocator.
     pub fn allocator(&mut self) -> MutexGuard<'_, Allocator> {
         self.allocator
