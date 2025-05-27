@@ -207,7 +207,7 @@ impl Renderer {
     }
 
     /// ImGui UI function.
-    pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32) {
+    pub fn ui(&mut self, ui: &Ui, hidpi_factor: f32, window_size: &mut usize) {
         let mut render_time_sum = 0.0;
         for i in 0..(100.min(self.render_time_counter) as usize) {
             render_time_sum += self.render_time[i];
@@ -218,6 +218,7 @@ impl Renderer {
             ui,
             hidpi_factor,
             render_time,
+            window_size,
             &mut self.current_scene_index,
             &mut self.scenes,
         );

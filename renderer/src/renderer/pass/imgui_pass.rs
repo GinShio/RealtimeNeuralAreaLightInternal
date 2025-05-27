@@ -41,27 +41,35 @@ impl ImGuiPass {
     pub fn ui(
         &mut self,
         ui: &Ui,
-        hidpi_factor: f32,
+        _hidpi_factor: f32,
         render_time: f32,
+        window_size: &mut usize,
         scene_index: &mut usize,
         scenes: &mut Vec<Box<dyn Scene>>,
     ) {
-        let width = 250.0;
-        let height = 300.0;
+        let width = 280.0;
+        let height = 320.0;
         let scene_names = scenes.iter().map(|s| s.scene_name()).collect::<Vec<_>>();
         let current_scene = &mut scenes[*scene_index];
 
         let w = ui
             .window("Scene Settings")
             .size([width, height], Condition::Appearing)
-            .position(
-                [1280.0 / hidpi_factor - width - 20.0, 20.0],
-                Condition::Appearing,
-            );
+            .position([20.0, 20.0], Condition::Appearing);
 
         w.build(|| {
             ui.text(format!("Render Time: {:.2} ms", render_time * 1000.0));
             ui.text(format!("FPS: {:.2}", 1.0 / render_time));
+            ui.spacing();
+            ui.spacing();
+
+            let window_sizes = ["800x600", "1280x720", "1920x1080"];
+            ui.combo_simple_string("Window Size", window_size, &window_sizes);
+
+            ui.spacing();
+            ui.spacing();
+            ui.separator();
+            ui.spacing();
             ui.spacing();
 
             ui.combo_simple_string("Scene", scene_index, &scene_names);

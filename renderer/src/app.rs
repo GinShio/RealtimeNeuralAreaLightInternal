@@ -20,6 +20,7 @@ pub struct App {
     window: Option<Window>,
     imgui: Context,
     platform: WinitPlatform,
+    window_size: usize,
     latest_frame: Instant,
 }
 impl App {
@@ -32,8 +33,18 @@ impl App {
             renderer: None,
             imgui,
             platform,
+            window_size: 1,
             latest_frame: Instant::now(),
         })
+    }
+
+    fn window_size(size: usize) -> PhysicalSize<u32> {
+        match size {
+            0 => PhysicalSize::new(800, 600),
+            1 => PhysicalSize::new(1280, 720),
+            2 => PhysicalSize::new(1920, 1080),
+            _ => PhysicalSize::new(1280, 720), // Default size
+        }
     }
 }
 impl ApplicationHandler for App {
@@ -41,7 +52,7 @@ impl ApplicationHandler for App {
         let attr = Window::default_attributes()
             .with_title("Vulkan: Test")
             .with_resizable(false)
-            .with_inner_size(PhysicalSize::new(1280, 720));
+            .with_inner_size(Self::window_size(self.window_size));
         let window = event_loop
             .create_window(attr)
             .expect("Failed to create window");
@@ -84,46 +95,70 @@ impl ApplicationHandler for App {
         &mut self,
         event_loop: &ActiveEventLoop,
         window_id: WindowId,
-        event: WindowEvent,
+        mut event: WindowEvent,
     ) {
-        match event {
+        match &mut event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            WindowEvent::Resized(size) => {
+            WindowEvent::Resized(_size) => {
+                // Cancel resizing
+                let size = Self::window_size(self.window_size);
                 if let Some(renderer) = &mut self.renderer {
                     renderer
                         .resize(size.width, size.height)
                         .expect("Failed to resize");
                 }
+                if let Some(window) = &mut self.window {
+                    window.request_inner_size(size).unwrap();
+                }
             }
             WindowEvent::RedrawRequested => {
                 if let Some(renderer) = &mut self.renderer {
+                    let prev_window_size = self.window_size;
+
                     // Generate imgui
                     self.platform
                         .prepare_frame(self.imgui.io_mut(), self.window.as_ref().unwrap())
                         .expect("Failed to prepare frame");
                     let ui = self.imgui.frame();
-                    renderer.ui(ui, self.platform.hidpi_factor() as f32);
+                    renderer.ui(
+                        ui,
+                        self.platform.hidpi_factor() as f32,
+                        &mut self.window_size,
+                    );
                     self.platform
                         .prepare_render(ui, self.window.as_ref().unwrap());
                     let imgui_draw_data = self.imgui.render();
 
-                    // render
                     renderer.render(imgui_draw_data).expect("Failed to render");
-                }
-                if let Some(window) = &self.window {
-                    window.request_redraw();
+
+                    if let Some(window) = &mut self.window {
+                        // Set window size
+                        if prev_window_size != self.window_size {
+                            let size = Self::window_size(self.window_size);
+                            renderer
+                                .resize(size.width, size.height)
+                                .expect("Failed to resize");
+                            window.request_inner_size(size).unwrap();
+                            self.platform.attach_window(
+                                self.imgui.io_mut(),
+                                window,
+                                HiDpiMode::Default,
+                            );
+                        }
+
+                        // render
+                        window.request_redraw();
+                    }
                 }
             }
-            event => {
-                let event = Event::<()>::WindowEvent { window_id, event };
-                self.platform.handle_event(
-                    self.imgui.io_mut(),
-                    self.window.as_ref().unwrap(),
-                    &event,
-                );
-            }
+            _ => (),
         }
+
+        // imgui handle event
+        let event = Event::<()>::WindowEvent { window_id, event };
+        self.platform
+            .handle_event(self.imgui.io_mut(), self.window.as_ref().unwrap(), &event);
     }
 }
