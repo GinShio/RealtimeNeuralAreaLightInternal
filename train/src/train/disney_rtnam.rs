@@ -126,8 +126,6 @@ pub fn train(
 
     // total parameters counts of two networks
     let first_phase_total_params_count = encoder_total_params_count + decoder_total_params_count;
-    let second_phase_total_params_count =
-        latent_texture_total_params_count + decoder_total_params_count;
 
     // === Load texture data ===
     let mut glb_textures = load_glb_texture(state, path, texture_size);
@@ -220,19 +218,25 @@ pub fn train(
     let (latent_texture_params_buffer, latent_texture_params_buffer_allocation) =
         create_storage_buffer(
             state,
-            (latent_texture_total_pixel_count * 8 * std::mem::size_of::<half::f16>() as u64)
-                .div_ceil(4)
+            (latent_texture_total_pixel_count * 8 * std::mem::size_of::<f32>() as u64).div_ceil(4)
                 * 4,
-        )?;
-    let (latent_texture_params_float_buffer, latent_texture_params_float_buffer_allocation) =
-        create_storage_buffer(
-            state,
-            latent_texture_total_pixel_count * 8 * std::mem::size_of::<f32>() as u64,
         )?;
     let (latent_texture_gradient_buffer, latent_texture_gradient_buffer_allocation) =
         create_storage_buffer(
             state,
-            latent_texture_total_pixel_count * 8 * std::mem::size_of::<f32>() as u64,
+            batch_size as u64 * 8 * std::mem::size_of::<f32>() as u64,
+        )?;
+    let (latent_texture_gradient_index_buffer, latent_texture_gradient_index_buffer_allocation) =
+        create_storage_buffer(state, batch_size as u64 * std::mem::size_of::<u32>() as u64)?;
+    let (latent_texture_step_count_buffer, latent_texture_step_count_buffer_allocation) =
+        create_storage_buffer(
+            state,
+            latent_texture_total_pixel_count * 8 * std::mem::size_of::<u32>() as u64,
+        )?;
+    let (latent_texture_lock_buffer, latent_texture_lock_buffer_allocation) =
+        create_storage_buffer(
+            state,
+            latent_texture_total_pixel_count * 8 * std::mem::size_of::<u32>() as u64,
         )?;
     let (latent_texture_moment_1_buffer, latent_texture_moment_1_buffer_allocation) =
         create_storage_buffer(
@@ -244,10 +248,10 @@ pub fn train(
             state,
             latent_texture_total_pixel_count * 8 * std::mem::size_of::<f32>() as u64,
         )?;
-    let (latent_texture_params_cpu_buffer, latent_texture_network_params_cpu_buffer_allocation) =
+    let (latent_texture_params_cpu_buffer, latent_texture_params_cpu_buffer_allocation) =
         create_cpu_storage_buffer(
             state,
-            latent_texture_total_pixel_count * 8 * std::mem::size_of::<half::f16>() as u64,
+            latent_texture_total_pixel_count * 8 * std::mem::size_of::<f32>() as u64,
         )?;
 
     // === Create 1st phase descriptors ===
@@ -959,81 +963,87 @@ pub fn train(
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture params float
+            // latent texture gradient buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture gradient buffer
+            // latent texture gradient index buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture moment 1 buffer
+            // latent texture step count buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture moment 2 buffer
+            // latent texture moment 1 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(5)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder network params
+            // latent texture moment 2 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(6)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder network params float
+            // decoder network params
             vk::DescriptorSetLayoutBinding::default()
                 .binding(7)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder gradient buffer
+            // decoder network params float
             vk::DescriptorSetLayoutBinding::default()
                 .binding(8)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder moment 1 buffer
+            // decoder gradient buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(9)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder moment 2 buffer
+            // decoder moment 1 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(10)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // encoder network params float
+            // decoder moment 2 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(11)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // base color texture
+            // encoder network params float
             vk::DescriptorSetLayoutBinding::default()
                 .binding(12)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // roughness metallic texture
+            // base color texture
             vk::DescriptorSetLayoutBinding::default()
                 .binding(13)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // normal texture
+            // roughness metallic texture
             vk::DescriptorSetLayoutBinding::default()
                 .binding(14)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::COMPUTE),
+            // normal texture
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(15)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
@@ -1054,7 +1064,7 @@ pub fn train(
                 .descriptor_count(1),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(11),
+                .descriptor_count(12),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(3),
@@ -1092,15 +1102,19 @@ pub fn train(
         let latent_texture_params_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_params_buffer)
             .offset(0)
-            .range(latent_texture_total_params_count * std::mem::size_of::<half::f16>() as u64)];
-        let latent_texture_params_float_buffer_info = [vk::DescriptorBufferInfo::default()
-            .buffer(latent_texture_params_float_buffer)
-            .offset(0)
             .range(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)];
         let latent_texture_gradient_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_gradient_buffer)
             .offset(0)
-            .range(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)];
+            .range(batch_size as u64 * 8 * std::mem::size_of::<f32>() as u64)];
+        let latent_texture_gradient_index_buffer_info = [vk::DescriptorBufferInfo::default()
+            .buffer(latent_texture_gradient_index_buffer)
+            .offset(0)
+            .range(batch_size as u64 * std::mem::size_of::<u32>() as u64)];
+        let latent_texture_step_count_buffer_info = [vk::DescriptorBufferInfo::default()
+            .buffer(latent_texture_step_count_buffer)
+            .offset(0)
+            .range(latent_texture_total_params_count * std::mem::size_of::<u32>() as u64)];
         let latent_texture_moment_1_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_moment_1_buffer)
             .offset(0)
@@ -1156,88 +1170,94 @@ pub fn train(
                 .dst_binding(0)
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(&uniform_buffer_info),
-            // encoder network params
+            // latent texture network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
                 .dst_binding(1)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_params_buffer_info),
-            // encoder network params float
+            // latent texture gradient buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
                 .dst_binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_params_float_buffer_info),
-            // encoder gradient buffer
+                .buffer_info(&latent_texture_gradient_buffer_info),
+            // latent texture gradient index buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
                 .dst_binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_gradient_buffer_info),
-            // encoder moment 1 buffer
+                .buffer_info(&latent_texture_gradient_index_buffer_info),
+            // latent texture step count buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
                 .dst_binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_moment_1_buffer_info),
-            // encoder moment 2 buffer
+                .buffer_info(&latent_texture_step_count_buffer_info),
+            // latent texture moment 1 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
                 .dst_binding(5)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(&latent_texture_moment_1_buffer_info),
+            // latent texture moment 2 buffer
+            vk::WriteDescriptorSet::default()
+                .dst_set(second_phase_init_descriptor_set)
+                .dst_binding(6)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_moment_2_buffer_info),
             // decoder network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(6)
+                .dst_binding(7)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_buffer_info),
             // decoder network params float
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(7)
+                .dst_binding(8)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_float_buffer_info),
             // decoder gradient buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(8)
+                .dst_binding(9)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_gradient_buffer_info),
             // decoder moment 1 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(9)
+                .dst_binding(10)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_moment_1_buffer_info),
             // decoder moment 2 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(10)
+                .dst_binding(11)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_moment_2_buffer_info),
             // encoder network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(11)
+                .dst_binding(12)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&encoder_network_params_buffer_info),
             // base color texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(12)
+                .dst_binding(13)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&base_color_texture_info),
             // roughness metallic texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(13)
+                .dst_binding(14)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&roughness_metallic_texture_info),
             // normal texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(14)
+                .dst_binding(15)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&normal_texture_info),
         ];
@@ -1265,33 +1285,39 @@ pub fn train(
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder_network params
+            // latent_texture_gradient_index buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder_gradient buffer
+            // decoder_network params
             vk::DescriptorSetLayoutBinding::default()
                 .binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // base color texture
+            // decoder_gradient buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(5)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // roughness metallic texture
+            // base color texture
             vk::DescriptorSetLayoutBinding::default()
                 .binding(6)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // normal texture
+            // roughness metallic texture
             vk::DescriptorSetLayoutBinding::default()
                 .binding(7)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::COMPUTE),
+            // normal texture
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(8)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
@@ -1312,7 +1338,7 @@ pub fn train(
                 .descriptor_count(1),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(4),
+                .descriptor_count(5),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(3),
@@ -1350,11 +1376,15 @@ pub fn train(
         let latent_texture_params_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_params_buffer)
             .offset(0)
-            .range(latent_texture_total_params_count * std::mem::size_of::<half::f16>() as u64)];
+            .range(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)];
         let latent_texture_gradient_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_gradient_buffer)
             .offset(0)
-            .range(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)];
+            .range(batch_size as u64 * 8 * std::mem::size_of::<f32>() as u64)];
+        let latent_texture_gradient_index_buffer_info = [vk::DescriptorBufferInfo::default()
+            .buffer(latent_texture_gradient_index_buffer)
+            .offset(0)
+            .range(batch_size as u64 * std::mem::size_of::<u32>() as u64)];
 
         let decoder_network_params_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(decoder_network_params_buffer)
@@ -1397,34 +1427,40 @@ pub fn train(
                 .dst_binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_gradient_buffer_info),
-            // decoder network params
+            // latent texture gradient index buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
                 .dst_binding(3)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(&latent_texture_gradient_index_buffer_info),
+            // decoder network params
+            vk::WriteDescriptorSet::default()
+                .dst_set(second_phase_train_descriptor_set)
+                .dst_binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_buffer_info),
             // decoder gradient buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(4)
+                .dst_binding(5)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_gradient_buffer_info),
             // base color texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(5)
+                .dst_binding(6)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&base_color_texture_info),
             // roughness metallic texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(6)
+                .dst_binding(7)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&roughness_metallic_texture_info),
             // normal texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(7)
+                .dst_binding(8)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&normal_texture_info),
         ];
@@ -1446,57 +1482,69 @@ pub fn train(
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture params float
+            // latent texture gradient buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture gradient buffer
+            // latent texture gradient index buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture moment 1 buffer
+            // latent texture step count buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture moment 2 buffer
+            // latent texture lock buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(5)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder network params
+            // latent texture moment 1 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(6)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder network params float
+            // latent texture moment 2 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(7)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder gradient buffer
+            // decoder network params
             vk::DescriptorSetLayoutBinding::default()
                 .binding(8)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder moment 1 buffer
+            // decoder network params float
             vk::DescriptorSetLayoutBinding::default()
                 .binding(9)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder moment 2 buffer
+            // decoder gradient buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(10)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::COMPUTE),
+            // decoder moment 1 buffer
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(11)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::COMPUTE),
+            // decoder moment 2 buffer
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(12)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
@@ -1517,7 +1565,7 @@ pub fn train(
                 .descriptor_count(1),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(10),
+                .descriptor_count(12),
         ];
         let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
             .pool_sizes(&descriptor_pool_size)
@@ -1552,15 +1600,23 @@ pub fn train(
         let latent_texture_params_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_params_buffer)
             .offset(0)
-            .range(latent_texture_total_params_count * std::mem::size_of::<half::f16>() as u64)];
-        let latent_texture_params_float_buffer_info = [vk::DescriptorBufferInfo::default()
-            .buffer(latent_texture_params_float_buffer)
-            .offset(0)
             .range(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)];
         let latent_texture_gradient_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_gradient_buffer)
             .offset(0)
-            .range(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)];
+            .range(batch_size as u64 * 8 * std::mem::size_of::<f32>() as u64)];
+        let latent_texture_gradient_index_buffer_info = [vk::DescriptorBufferInfo::default()
+            .buffer(latent_texture_gradient_index_buffer)
+            .offset(0)
+            .range(batch_size as u64 * std::mem::size_of::<u32>() as u64)];
+        let latent_texture_step_count_buffer_info = [vk::DescriptorBufferInfo::default()
+            .buffer(latent_texture_step_count_buffer)
+            .offset(0)
+            .range(latent_texture_total_params_count * std::mem::size_of::<u32>() as u64)];
+        let latent_texture_lock_buffer = [vk::DescriptorBufferInfo::default()
+            .buffer(latent_texture_lock_buffer)
+            .offset(0)
+            .range(latent_texture_total_params_count * std::mem::size_of::<u32>() as u64)];
         let latent_texture_moment_1_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_moment_1_buffer)
             .offset(0)
@@ -1598,64 +1654,76 @@ pub fn train(
                 .dst_binding(0)
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(&uniform_buffer_info),
-            // encoder network params
+            // latent texture network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
                 .dst_binding(1)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_params_buffer_info),
-            // encoder network params float
+            // latent texture gradient buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
                 .dst_binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_params_float_buffer_info),
-            // encoder gradient buffer
+                .buffer_info(&latent_texture_gradient_buffer_info),
+            // latent texture gradient index buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
                 .dst_binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_gradient_buffer_info),
-            // encoder moment 1 buffer
+                .buffer_info(&latent_texture_gradient_index_buffer_info),
+            // latent texture step count buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
                 .dst_binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_moment_1_buffer_info),
-            // encoder moment 2 buffer
+                .buffer_info(&latent_texture_step_count_buffer_info),
+            // latent texture lock buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
                 .dst_binding(5)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(&latent_texture_lock_buffer),
+            // latent texture moment 1 buffer
+            vk::WriteDescriptorSet::default()
+                .dst_set(second_phase_optimization_descriptor_set)
+                .dst_binding(6)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(&latent_texture_moment_1_buffer_info),
+            // latent texture moment 2 buffer
+            vk::WriteDescriptorSet::default()
+                .dst_set(second_phase_optimization_descriptor_set)
+                .dst_binding(7)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_moment_2_buffer_info),
             // decoder network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(6)
+                .dst_binding(8)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_buffer_info),
             // decoder network params float
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(7)
+                .dst_binding(9)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_float_buffer_info),
             // decoder gradient buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(8)
+                .dst_binding(10)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_gradient_buffer_info),
             // decoder moment 1 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(9)
+                .dst_binding(11)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_moment_1_buffer_info),
             // decoder moment 2 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(10)
+                .dst_binding(12)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_moment_2_buffer_info),
         ];
@@ -2049,7 +2117,10 @@ pub fn train(
         );
         state.device.cmd_dispatch(
             command_buffer,
-            (latent_texture_total_pixel_count + decoder_total_params_count).div_ceil(32) as u32,
+            (latent_texture_total_pixel_count as u32
+                + decoder_total_params_count as u32
+                + batch_size)
+                .div_ceil(32),
             1,
             1,
         );
@@ -2167,7 +2238,7 @@ pub fn train(
                 );
                 state.device.cmd_dispatch(
                     command_buffer,
-                    second_phase_total_params_count.div_ceil(32) as u32,
+                    (decoder_total_params_count as u32 + batch_size).div_ceil(32),
                     1,
                     1,
                 );
@@ -2287,7 +2358,7 @@ pub fn train(
 
         // Save parameters
         if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
-            let latent_texture_data = latent_texture_params_buffer_allocation
+            let latent_texture_data = latent_texture_params_cpu_buffer_allocation
                 .mapped_slice()
                 .expect("Failed to allocate CPU buffer for latent texture params");
             save_mip_image(latent_texture_data, texture_size, "./network/disney-rtnam/")?;
@@ -2490,18 +2561,32 @@ pub fn train(
             .expect("Failed to free latent texture network params buffer");
         state
             .device
-            .destroy_buffer(latent_texture_params_float_buffer, None);
-        state
-            .allocator()
-            .free(latent_texture_params_float_buffer_allocation)
-            .expect("Failed to free latent texture network params float buffer");
-        state
-            .device
             .destroy_buffer(latent_texture_gradient_buffer, None);
         state
             .allocator()
             .free(latent_texture_gradient_buffer_allocation)
             .expect("Failed to free latent texture gradient buffer");
+        state
+            .device
+            .destroy_buffer(latent_texture_gradient_index_buffer, None);
+        state
+            .allocator()
+            .free(latent_texture_gradient_index_buffer_allocation)
+            .expect("Failed to free latent texture gradient index buffer");
+        state
+            .device
+            .destroy_buffer(latent_texture_step_count_buffer, None);
+        state
+            .allocator()
+            .free(latent_texture_step_count_buffer_allocation)
+            .expect("Failed to free latent texture gradient index buffer");
+        state
+            .device
+            .destroy_buffer(latent_texture_lock_buffer, None);
+        state
+            .allocator()
+            .free(latent_texture_lock_buffer_allocation)
+            .expect("Failed to free latent texture gradient index buffer");
         state
             .device
             .destroy_buffer(latent_texture_moment_1_buffer, None);
@@ -2521,7 +2606,7 @@ pub fn train(
             .destroy_buffer(latent_texture_params_cpu_buffer, None);
         state
             .allocator()
-            .free(latent_texture_network_params_cpu_buffer_allocation)
+            .free(latent_texture_params_cpu_buffer_allocation)
             .expect("Failed to free latent texture network params CPU buffer");
     }
 

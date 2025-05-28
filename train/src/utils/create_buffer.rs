@@ -48,7 +48,11 @@ pub fn create_storage_buffer(
     // Create storage buffer
     let storage_buffer_create_info = vk::BufferCreateInfo::default()
         .size(size)
-        .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
+        .usage(
+            vk::BufferUsageFlags::STORAGE_BUFFER
+                | vk::BufferUsageFlags::TRANSFER_DST
+                | vk::BufferUsageFlags::TRANSFER_SRC,
+        )
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
     let storage_buffer = unsafe {
         state

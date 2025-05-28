@@ -48,24 +48,27 @@ struct UniformBuffer
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-StructuredBuffer<half> latentTextureParams;
+StructuredBuffer<float> latentTextureParams;
 
 [[vk::binding(2)]]
 RWStructuredBuffer<float> latentTextureGradients;
 
 [[vk::binding(3)]]
-StructuredBuffer<half> decoderNetworkParams;
+RWStructuredBuffer<uint> latentTextureGradientIndex;
 
 [[vk::binding(4)]]
-RWStructuredBuffer<half> decoderGradients;
+StructuredBuffer<half> decoderNetworkParams;
 
 [[vk::binding(5)]]
-Sampler2D baseColorSampler;
+RWStructuredBuffer<half> decoderGradients;
 
 [[vk::binding(6)]]
-Sampler2D roughnessMetallicSampler;
+Sampler2D baseColorSampler;
 
 [[vk::binding(7)]]
+Sampler2D roughnessMetallicSampler;
+
+[[vk::binding(8)]]
 Sampler2D normalSampler;
 
 
@@ -428,14 +431,14 @@ void main(uint3 tid: SV_DispatchThreadID)
     // calculate model BRDF
     let parameterIndex = inputParametersIndex(uv, mipLevel);
     CoopVec<half, 8> input = {
-        latentTextureParams[parameterIndex + 0],
-        latentTextureParams[parameterIndex + 1],
-        latentTextureParams[parameterIndex + 2],
-        latentTextureParams[parameterIndex + 3],
-        latentTextureParams[parameterIndex + 4],
-        latentTextureParams[parameterIndex + 5],
-        latentTextureParams[parameterIndex + 6],
-        latentTextureParams[parameterIndex + 7],
+        half(latentTextureParams[parameterIndex + 0]),
+        half(latentTextureParams[parameterIndex + 1]),
+        half(latentTextureParams[parameterIndex + 2]),
+        half(latentTextureParams[parameterIndex + 3]),
+        half(latentTextureParams[parameterIndex + 4]),
+        half(latentTextureParams[parameterIndex + 5]),
+        half(latentTextureParams[parameterIndex + 6]),
+        half(latentTextureParams[parameterIndex + 7]),
     };
 
     var model = Model(
@@ -455,20 +458,13 @@ void main(uint3 tid: SV_DispatchThreadID)
     model.backward(inputParams, wi, wo, HCoopVec<3>(loss[0], loss[1], loss[2]));
 
     // store gradients
-    InterlockedAdd(
-        latentTextureGradients[parameterIndex + 0], inputParams.d[0]);
-    InterlockedAdd(
-        latentTextureGradients[parameterIndex + 1], inputParams.d[1]);
-    InterlockedAdd(
-        latentTextureGradients[parameterIndex + 2], inputParams.d[2]);
-    InterlockedAdd(
-        latentTextureGradients[parameterIndex + 3], inputParams.d[3]);
-    InterlockedAdd(
-        latentTextureGradients[parameterIndex + 4], inputParams.d[4]);
-    InterlockedAdd(
-        latentTextureGradients[parameterIndex + 5], inputParams.d[5]);
-    InterlockedAdd(
-        latentTextureGradients[parameterIndex + 6], inputParams.d[6]);
-    InterlockedAdd(
-        latentTextureGradients[parameterIndex + 7], inputParams.d[7]);
+    latentTextureGradients[i * 8 + 0] += float(inputParams.d[0]);
+    latentTextureGradients[i * 8 + 1] += float(inputParams.d[1]);
+    latentTextureGradients[i * 8 + 2] += float(inputParams.d[2]);
+    latentTextureGradients[i * 8 + 3] += float(inputParams.d[3]);
+    latentTextureGradients[i * 8 + 4] += float(inputParams.d[4]);
+    latentTextureGradients[i * 8 + 5] += float(inputParams.d[5]);
+    latentTextureGradients[i * 8 + 6] += float(inputParams.d[6]);
+    latentTextureGradients[i * 8 + 7] += float(inputParams.d[7]);
+    latentTextureGradientIndex[i] = parameterIndex;
 }

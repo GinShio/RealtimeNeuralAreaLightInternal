@@ -44,45 +44,48 @@ struct UniformBuffer
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<half> latentTextureParams;
+RWStructuredBuffer<float> latentTextureParams;
 
 [[vk::binding(2)]]
-RWStructuredBuffer<float> latentTextureParamsFloat;
-
-[[vk::binding(3)]]
 RWStructuredBuffer<float> latentTextureGradients;
 
+[[vk::binding(3)]]
+RWStructuredBuffer<uint> latentTextureGradientIndex;
+
 [[vk::binding(4)]]
-RWStructuredBuffer<float> latentTextureMoments1;
+RWStructuredBuffer<uint> latentTextureStepCount;
 
 [[vk::binding(5)]]
-RWStructuredBuffer<float> latentTextureMoments2;
+RWStructuredBuffer<float> latentTextureMoments1;
 
 [[vk::binding(6)]]
-RWStructuredBuffer<half> decoderNetworkParams;
+RWStructuredBuffer<float> latentTextureMoments2;
 
 [[vk::binding(7)]]
-RWStructuredBuffer<float> decoderNetworkParamsFloat;
+RWStructuredBuffer<half> decoderNetworkParams;
 
 [[vk::binding(8)]]
-RWStructuredBuffer<half> decoderGradients;
+RWStructuredBuffer<float> decoderNetworkParamsFloat;
 
 [[vk::binding(9)]]
-RWStructuredBuffer<float> decoderMoments1;
+RWStructuredBuffer<half> decoderGradients;
 
 [[vk::binding(10)]]
-RWStructuredBuffer<float> decoderMoments2;
+RWStructuredBuffer<float> decoderMoments1;
 
 [[vk::binding(11)]]
-StructuredBuffer<half> encoderNetworkParams;
+RWStructuredBuffer<float> decoderMoments2;
 
 [[vk::binding(12)]]
-Sampler2D baseColorSampler;
+StructuredBuffer<half> encoderNetworkParams;
 
 [[vk::binding(13)]]
-Sampler2D roughnessMetallicSampler;
+Sampler2D baseColorSampler;
 
 [[vk::binding(14)]]
+Sampler2D roughnessMetallicSampler;
+
+[[vk::binding(15)]]
 Sampler2D normalSampler;
 
 struct EncoderModel {
@@ -178,7 +181,7 @@ struct EncoderModel {
 void main(uint3 tid: SV_DispatchThreadID)
 {
     uint i = tid.x;
-    if (i >= uniforms.latentTexturePixelSize + uniforms.decoderParamsSize)
+    if (i >= uniforms.latentTexturePixelSize + uniforms.decoderParamsSize + uniforms.batchSize)
         return;
 
     if (i < uniforms.latentTexturePixelSize)
@@ -226,14 +229,12 @@ void main(uint3 tid: SV_DispatchThreadID)
         // Init parameters
         for (uint j = 0; j < 8; j++)
         {
-            latentTextureParams[i * 8 + j] = input[j];
-            latentTextureParamsFloat[i * 8 + j] = float(input[j]);
-            latentTextureGradients[i * 8 + j] = 0.0;
+            latentTextureParams[i * 8 + j] = float(input[j]);
             latentTextureMoments1[i * 8 + j] = 0.0f;
             latentTextureMoments2[i * 8 + j] = 0.0f;
         }
     }
-    else
+    else if (i < uniforms.latentTexturePixelSize + uniforms.decoderParamsSize)
     {
         // Initialize decoder parameters
         i -= uniforms.latentTexturePixelSize;
@@ -242,5 +243,13 @@ void main(uint3 tid: SV_DispatchThreadID)
         decoderGradients[i] = half(0.0);
         decoderMoments1[i] = 0.0f;
         decoderMoments2[i] = 0.0f;
+    }
+    else
+    {
+        // Initialize latent texture gradients
+        i -= uniforms.latentTexturePixelSize + uniforms.decoderParamsSize;
+        latentTextureGradients[i] = 0.0;
+        latentTextureGradientIndex[i] = 0;
+        latentTextureStepCount[i] = 0;
     }
 }
