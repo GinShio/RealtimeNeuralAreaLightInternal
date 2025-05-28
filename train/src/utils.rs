@@ -9,3 +9,6 @@ pub use create_texture::*;
 
 mod load_glb_texture;
 pub use load_glb_texture::*;
+
+mod save_mip_image;
+pub use save_mip_image::*;

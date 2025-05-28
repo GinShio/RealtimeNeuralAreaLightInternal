@@ -25,27 +25,29 @@ struct UniformBuffer
 
     uint batchSize;
     float learningRate;
-    uint encoderParamsSize;
+    uint latentTexturePixelSize;
+    uint latentTextureParamsSize;
     uint decoderParamsSize;
+    uint textureSize;
 }
 
 [[vk::binding(0)]]
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<half> encoderNetworkParams;
+RWStructuredBuffer<half> latentTextureParams;
 
 [[vk::binding(2)]]
-RWStructuredBuffer<float> encoderNetworkParamsFloat;
+RWStructuredBuffer<float> latentTextureParamsFloat;
 
 [[vk::binding(3)]]
-RWStructuredBuffer<half> encoderGradients;
+RWStructuredBuffer<float> latentTextureGradients;
 
 [[vk::binding(4)]]
-RWStructuredBuffer<float> encoderMoments1;
+RWStructuredBuffer<float> latentTextureMoments1;
 
 [[vk::binding(5)]]
-RWStructuredBuffer<float> encoderMoments2;
+RWStructuredBuffer<float> latentTextureMoments2;
 
 [[vk::binding(6)]]
 RWStructuredBuffer<half> decoderNetworkParams;
@@ -66,29 +68,32 @@ RWStructuredBuffer<float> decoderMoments2;
 void main(uint3 tid: SV_DispatchThreadID)
 {
     uint i = tid.x;
-    if (i >= uniforms.encoderParamsSize + uniforms.decoderParamsSize)
+    if (i >= uniforms.latentTextureParamsSize + uniforms.decoderParamsSize)
         return;
 
-    if (i < uniforms.encoderParamsSize)
+    if (i < uniforms.latentTextureParamsSize)
     {
-        float encoderGradient = (float)encoderGradients[i];
-        encoderGradients[i] = half(0.0);
+        float latentTextureGradient = latentTextureGradients[i];
+        // if (latentTextureGradient == 0.0)
+        //     return;
 
-        if (isfinite(encoderGradient))
+        latentTextureGradients[i] = 0.0;
+
+        if (isfinite(latentTextureGradient))
         {
-            float weightbias = encoderNetworkParamsFloat[i];
+            float weightbias = latentTextureParamsFloat[i];
 
-            optimizers::Adam optimizer = optimizers::Adam(encoderMoments1, encoderMoments2, uniforms.learningRate, LOSS_SCALE);
+            optimizers::Adam optimizer = optimizers::Adam(latentTextureMoments1, latentTextureMoments2, uniforms.learningRate, LOSS_SCALE);
 
-            float adjustedWeightbias = optimizer.step(weightbias, i, encoderGradient, pc.currentStep + 1);
+            float adjustedWeightbias = optimizer.step(weightbias, i, latentTextureGradient, pc.currentStep + 1);
 
-            encoderNetworkParamsFloat[i] = adjustedWeightbias;
-            encoderNetworkParams[i] = (half)adjustedWeightbias;
+            latentTextureParamsFloat[i] = adjustedWeightbias;
+            latentTextureParams[i] = (half)adjustedWeightbias;
         }
     }
     else
     {
-        i -= uniforms.encoderParamsSize;
+        i -= uniforms.latentTextureParamsSize;
         float decoderGradient = (float)decoderGradients[i];
         decoderGradients[i] = half(0.0);
 

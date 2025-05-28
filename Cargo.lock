@@ -2222,6 +2222,7 @@ dependencies = [
  "ash",
  "bytemuck",
  "clap",
+ "exr",
  "glam",
  "gltf",
  "gpu-allocator",

@@ -20,9 +20,9 @@ struct UniformBuffer
     uint4 decoderBiasOffsets2;
 
     uint batchSize;
+    float learningRate;
     uint encoderParamsSize;
     uint decoderParamsSize;
-    float learningRate;
 }
 
 [[vk::binding(0)]]

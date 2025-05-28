@@ -11,7 +11,7 @@ mod vulkan_state;
 struct Args {
     #[arg(short, long)]
     scene: String,
-    #[arg(short, long, default_value_t = 2000)]
+    #[arg(short, long, default_value_t = 1000)]
     epochs: u32,
 }
 

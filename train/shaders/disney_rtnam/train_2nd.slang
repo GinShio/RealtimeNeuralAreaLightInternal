@@ -38,18 +38,20 @@ struct UniformBuffer
 
     uint batchSize;
     float learningRate;
-    uint encoderParamsSize;
+    uint latentTexturePixelSize;
+    uint latentTextureParamsSize;
     uint decoderParamsSize;
+    uint textureSize;
 }
 
 [[vk::binding(0)]]
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-StructuredBuffer<half> encoderNetworkParams;
+StructuredBuffer<half> latentTextureParams;
 
 [[vk::binding(2)]]
-RWStructuredBuffer<half> encoderGradients;
+RWStructuredBuffer<float> latentTextureGradients;
 
 [[vk::binding(3)]]
 StructuredBuffer<half> decoderNetworkParams;
@@ -70,12 +72,8 @@ Sampler2D normalSampler;
 
 struct Model {
     __init(
-        StructuredBuffer<half> encoderMatrixBuffer,
-        RWStructuredBuffer<half> encoderDerivativeBuffer,
         StructuredBuffer<half> decoderMatrixBuffer,
         RWStructuredBuffer<half> decoderDerivativeBuffer) {
-        encoderParameters = MatrixBiasBuffer<half>(encoderMatrixBuffer);
-        encoderDerivatives = MatrixBiasBufferDifferential<half>(encoderDerivativeBuffer);
         decoderParameters = MatrixBiasBuffer<half>(decoderMatrixBuffer);
         decoderDerivatives = MatrixBiasBufferDifferential<half>(decoderDerivativeBuffer);
     }
@@ -221,10 +219,9 @@ struct Model {
 
     [Differentiable]
     static func forward_s(
-        no_diff input: CoopVec<half, 8>,
+        latentVector: CoopVec<half, 8>,
         no_diff wi: float3,
         no_diff wo: float3,
-        encoderParams: MatrixBiasBuffer<half>,
         decoderParams: MatrixBiasBuffer<half>,
     )->CoopVec<half, 3>
     {
@@ -236,64 +233,7 @@ struct Model {
 
         using rtxns::mlp;
 
-        // encoder
         CoopVec<half, 64> hidden;
-        CoopVec<half, 8> latentVector;
-
-        // encoder 1st layer
-        hidden = LinearOp<half, 64, 8>(
-            input,
-            encoderParams,
-            uint2(
-                uniforms.encoderWeightOffsets1[0],
-                uniforms.encoderBiasOffsets1[0]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // encoder 2nd layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            encoderParams,
-            uint2(
-                uniforms.encoderWeightOffsets1[1],
-                uniforms.encoderBiasOffsets1[1]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // encoder 3rd layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            encoderParams,
-            uint2(
-                uniforms.encoderWeightOffsets1[2],
-                uniforms.encoderBiasOffsets1[2]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // encoder 4th layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            encoderParams,
-            uint2(
-                uniforms.encoderWeightOffsets1[3],
-                uniforms.encoderBiasOffsets1[3]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // encoder 5th layer
-        latentVector = LinearOp<half, 8, 64>(
-            hidden,
-            encoderParams,
-            uint2(
-                uniforms.encoderWeightOffsets2[0],
-                uniforms.encoderBiasOffsets2[0]),
-            matrixLayout,
-            componentType);
-        latentVector = encoderFinalAct.eval(latentVector);
 
         // decoder transform frame
         CoopVec<half, 12> transformFrameInput;
@@ -311,7 +251,7 @@ struct Model {
             wi,
             wo);
 
-        // // decoder
+        // decoder
         CoopVec<half, 3> output;
 
         // decoder input
@@ -368,37 +308,33 @@ struct Model {
 
     [mutating]
     func forward(
-        input: CoopVec<half, 8>,
+        latentVector: CoopVec<half, 8>,
         wi: float3,
         wo: float3)
         ->CoopVec<half, 3>
     {
         return forward_s(
-            input,
+            latentVector,
             wi,
             wo,
-            encoderParameters,
             decoderParameters);
     }
 
     [mutating]
     func backward(
-        input: CoopVec<half, 8>,
+        inout latentVector: DifferentialPair<CoopVec<half, 8>>,
         wi: float3,
         wo: float3,
         loss: CoopVec<half, 3>)
     {
         bwd_diff(forward_s)(
-            input,
+            latentVector,
             wi,
             wo,
-            DifferentialPtrPair<MatrixBiasBuffer<half>>(encoderParameters, encoderDerivatives),
             DifferentialPtrPair<MatrixBiasBuffer<half>>(decoderParameters, decoderDerivatives),
             loss);
     }
 
-    MatrixBiasBuffer<half> encoderParameters;
-    MatrixBiasBufferDifferential<half> encoderDerivatives;
     MatrixBiasBuffer<half> decoderParameters;
     MatrixBiasBufferDifferential<half> decoderDerivatives;
 }
@@ -428,6 +364,33 @@ func actualBrdfFunc(wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
     let wi_tangent = mul(TBN, wi);
     let wo_tangent = mul(TBN, wo);
     return DisneyBRDF(wi_tangent, wo_tangent, baseColor.rgb, roughness, metallic);
+}
+
+func inputParametersIndex(uv: float2, mipLevel: float) -> uint
+{
+    // Select lower mip level
+    let mipLevelFloor = floor(mipLevel);
+
+    // Calculate pixel offset in latent texture buffer
+    var currentMipLevel = 0;
+    var currentMipSize = uniforms.textureSize;
+    var currentPixelOffset = 0;
+    while (currentMipSize > 1)
+    {
+        if (mipLevelFloor == currentMipLevel)
+            break;
+
+        currentPixelOffset += currentMipSize * currentMipSize;
+        currentMipSize /= 2;
+        currentMipLevel++;
+    }
+    let st = uint2(
+        uint(uv.x * currentMipSize + 0.5),
+        uint(uv.y * currentMipSize + 0.5));
+    let latentTexturePixelIndex = currentPixelOffset + st.y * currentMipSize + st.x;
+
+    // Calculate index in latent texture parameters buffer
+    return latentTexturePixelIndex * 8;
 }
 
 func LogL1LossDerivative(
@@ -463,17 +426,19 @@ void main(uint3 tid: SV_DispatchThreadID)
     let actualBrdf = actualBrdfFunc(wi, wo, uv, mipLevel);
 
     // calculate model BRDF
-    let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);
-    let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
-    let normal = normalSampler.SampleLevel(uv, mipLevel).xyz * 2 - 1;
-    let roughness = metallicRoughness.y;
-    let metallic = metallicRoughness.x;
-
-    CoopVec<half, 8> input = { baseColor.r, baseColor.g, baseColor.b, roughness, metallic, normal.x, normal.y, normal.z };
+    let parameterIndex = inputParametersIndex(uv, mipLevel);
+    CoopVec<half, 8> input = {
+        latentTextureParams[parameterIndex + 0],
+        latentTextureParams[parameterIndex + 1],
+        latentTextureParams[parameterIndex + 2],
+        latentTextureParams[parameterIndex + 3],
+        latentTextureParams[parameterIndex + 4],
+        latentTextureParams[parameterIndex + 5],
+        latentTextureParams[parameterIndex + 6],
+        latentTextureParams[parameterIndex + 7],
+    };
 
     var model = Model(
-        encoderNetworkParams,
-        encoderGradients,
         decoderNetworkParams,
         decoderGradients);
 
@@ -485,5 +450,25 @@ void main(uint3 tid: SV_DispatchThreadID)
     let loss = LogL1LossDerivative(actualBrdf, predictedBrdf, scale);
 
     // backward
-    model.backward(input, wi, wo, HCoopVec<3>(loss[0], loss[1], loss[2]));
+    CoopVec<half, 8> inputDerivative;
+    var inputParams = diffPair(input, inputDerivative);
+    model.backward(inputParams, wi, wo, HCoopVec<3>(loss[0], loss[1], loss[2]));
+
+    // store gradients
+    InterlockedAdd(
+        latentTextureGradients[parameterIndex + 0], inputParams.d[0]);
+    InterlockedAdd(
+        latentTextureGradients[parameterIndex + 1], inputParams.d[1]);
+    InterlockedAdd(
+        latentTextureGradients[parameterIndex + 2], inputParams.d[2]);
+    InterlockedAdd(
+        latentTextureGradients[parameterIndex + 3], inputParams.d[3]);
+    InterlockedAdd(
+        latentTextureGradients[parameterIndex + 4], inputParams.d[4]);
+    InterlockedAdd(
+        latentTextureGradients[parameterIndex + 5], inputParams.d[5]);
+    InterlockedAdd(
+        latentTextureGradients[parameterIndex + 6], inputParams.d[6]);
+    InterlockedAdd(
+        latentTextureGradients[parameterIndex + 7], inputParams.d[7]);
 }

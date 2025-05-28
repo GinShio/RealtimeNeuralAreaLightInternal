@@ -171,6 +171,10 @@ impl VulkanState {
                     };
 
                 // Check if support required extensions
+                let support_shader_atomic_float_extension = extension_props.iter().any(|ext| {
+                    let ext_name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
+                    ext_name == vk::EXT_SHADER_ATOMIC_FLOAT_NAME
+                });
                 let support_cooperative_extension = extension_props.iter().any(|ext| {
                     let ext_name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
                     ext_name == cooperative_vector::NV_COOPERATIVE_VECTOR_NAME
@@ -179,20 +183,27 @@ impl VulkanState {
                     let ext_name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
                     ext_name == shader_replicated_composites::EXT_SHADER_REPLICATED_COMPOSITES_NAME
                 });
-                let support_extensions = support_cooperative_extension
+                let support_extensions = support_shader_atomic_float_extension
+                    && support_cooperative_extension
                     && support_shader_replicated_extension;
 
                 // Check if support required features
+                let mut shader_atomic_float_features =
+                    vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::default();
                 let mut cooperative_features =
                     cooperative_vector::PhysicalDeviceCooperativeVectorFeaturesNV::default();
-                    let mut replicated_composites_features =
-                        shader_replicated_composites::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default();
+                let mut replicated_composites_features =
+                    shader_replicated_composites::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default();
                 let mut features2 =
-                    vk::PhysicalDeviceFeatures2::default().push_next(&mut cooperative_features).push_next(&mut replicated_composites_features);
+                    vk::PhysicalDeviceFeatures2::default()
+                    .push_next(&mut shader_atomic_float_features)
+                    .push_next(&mut cooperative_features)
+                    .push_next(&mut replicated_composites_features);
                 unsafe {
                     instance.get_physical_device_features2(device, &mut features2);
                 }
-                let support_features = cooperative_features.cooperative_vector == vk::TRUE
+                let support_features = shader_atomic_float_features.shader_buffer_float32_atomic_add == vk::TRUE
+                    && cooperative_features.cooperative_vector == vk::TRUE
                     && cooperative_features.cooperative_vector_training == vk::TRUE
                     && replicated_composites_features.shader_replicated_composites == vk::TRUE;
 
@@ -229,9 +240,12 @@ impl VulkanState {
             // - synchronization2
             // - dynamic rendering
             // - extended dynamic state
+            // Use shader atomic float features:
+            // - shader_buffer_float32_atomic_add
             // Use cooperative vector features:
             // - cooperative_vector
             // - cooperative_vector_training
+            // Use shader replicated composites features:
             // - shader_replicated_composites
             let vulkan_features = vk::PhysicalDeviceFeatures::default().shader_int64(true);
             let mut vulkan_11_features =
@@ -251,25 +265,30 @@ impl VulkanState {
             let mut extended_dynamic_state =
                 vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT::default()
                     .extended_dynamic_state(true);
-            let mut replicated_composites_features =
-                shader_replicated_composites::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default()
-                    .shader_replicated_composites(true);
+            let mut shader_atomic_float_features =
+                vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::default()
+                    .shader_buffer_float32_atomic_add(true);
             let mut cooperative_vector_features =
                 cooperative_vector::PhysicalDeviceCooperativeVectorFeaturesNV::default()
                     .cooperative_vector(true)
                     .cooperative_vector_training(true);
+            let mut replicated_composites_features =
+                shader_replicated_composites::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default()
+                    .shader_replicated_composites(true);
             let mut enabled_features = vk::PhysicalDeviceFeatures2::default()
                 .features(vulkan_features)
                 .push_next(&mut vulkan_11_features)
                 .push_next(&mut vulkan_12_features)
                 .push_next(&mut vulkan_13_features)
                 .push_next(&mut extended_dynamic_state)
-                .push_next(&mut replicated_composites_features)
-                .push_next(&mut cooperative_vector_features);
+                .push_next(&mut shader_atomic_float_features)
+                .push_next(&mut cooperative_vector_features)
+                .push_next(&mut replicated_composites_features);
 
             let enabled_extension_names = [
                 vk::KHR_16BIT_STORAGE_NAME.as_ptr(),
                 vk::NV_DEVICE_DIAGNOSTICS_CONFIG_NAME.as_ptr(),
+                vk::EXT_SHADER_ATOMIC_FLOAT_NAME.as_ptr(),
                 cooperative_vector::NV_COOPERATIVE_VECTOR_NAME.as_ptr(),
                 shader_replicated_composites::EXT_SHADER_REPLICATED_COMPOSITES_NAME.as_ptr(),
             ];
