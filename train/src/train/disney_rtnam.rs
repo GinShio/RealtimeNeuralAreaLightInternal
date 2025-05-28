@@ -1775,6 +1775,10 @@ pub fn train(
     // Training
     // ===========================
 
+    let start = std::time::Instant::now();
+
+    println!("\nTraining start...\n");
+
     // === 1st Phase ===
 
     // Update uniform buffer
@@ -2380,6 +2384,15 @@ pub fn train(
     }
 
     println!("\r  Second Phase Epoch {}/{} - Done", epochs, epochs);
+
+    let elapsed = start.elapsed();
+    let minutes = elapsed.as_secs() / 60;
+    let seconds = elapsed.as_secs() % 60;
+    let millis = elapsed.subsec_millis();
+    println!(
+        "\nTraining completed: {:02}m {:02}s {:02}ms",
+        minutes, seconds, millis
+    );
 
     // ===========================
     // Cleanup
