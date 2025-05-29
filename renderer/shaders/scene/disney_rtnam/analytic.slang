@@ -4,6 +4,8 @@ import "../../rtxns/CooperativeVectorFunctions";
 import "../../rtxns/Utils";
 import "../../rtxns/LinearOps";
 
+import "disney.slang";
+
 [[vk::binding(0, 2)]]
 StructuredBuffer<half> params;
 
@@ -17,15 +19,19 @@ struct LightParams
 
 struct Uniforms
 {
-    uint4 weight_offsets;
-    uint4 bias_offsets;
+    uint4 weightOffsets0;
+    uint4 weightOffsets1;
+    uint4 biasOffsets0;
+    uint4 biasOffsets1;
 
     float4x4 view;
     float4x4 projection;
 
     uint samplerIndex;
-    uint light_count;
+    uint latentTexture0Index;
+    uint latentTexture1Index;
 
+    uint light_count;
     LightParams light[3];
 }
 
@@ -86,14 +92,6 @@ float3x3 inverse3x3(float3x3 m)
         +(a10 * a21 - a11 * a20) * invDet,
         -(a00 * a21 - a01 * a20) * invDet,
         +(a00 * a11 - a01 * a10) * invDet);
-}
-
-func srgbToLinear(color: float3)->float3
-{
-    let useLinear = color <= 0.04045;
-    let v1 = color / 12.92;
-    let v2 = pow((color + 0.055) / 1.055, 2.4);
-    return select(useLinear, v1, v2);
 }
 
 [shader("vertex")]
@@ -199,48 +197,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
         let NdotH = max(dot(N, H), 0.0);
         let LdotH = max(dot(L, H), 0.0);
 
-        float inputs[5] = { NdotL, NdotV, NdotH, LdotH, roughness };
-        CoopVec<half, 30> inputParams = rtxns::EncodeFrequency<half, 5>(inputs);
-        CoopVec<half, 32> hiddenParams;
-        CoopVec<half, 4> outputParams;
-
-        hiddenParams = rtxns::LinearOp<half, 32, 30>(
-            inputParams,
-            params,
-            uniforms.weight_offsets[0],
-            uniforms.bias_offsets[0],
-            CoopVecMatrixLayout::InferencingOptimal,
-            CoopVecComponentType::Float16);
-        hiddenParams = rtxns::relu(hiddenParams);
-
-        hiddenParams = rtxns::LinearOp<half, 32, 32>(
-            hiddenParams,
-            params,
-            uniforms.weight_offsets[1],
-            uniforms.bias_offsets[1],
-            CoopVecMatrixLayout::InferencingOptimal,
-            CoopVecComponentType::Float16);
-        hiddenParams = rtxns::relu(hiddenParams);
-
-        hiddenParams = rtxns::LinearOp<half, 32, 32>(
-            hiddenParams,
-            params,
-            uniforms.weight_offsets[2],
-            uniforms.bias_offsets[2],
-            CoopVecMatrixLayout::InferencingOptimal,
-            CoopVecComponentType::Float16);
-        hiddenParams = rtxns::relu(hiddenParams);
-
-        outputParams = rtxns::LinearOp<half, 4, 32>(
-            hiddenParams,
-            params,
-            uniforms.weight_offsets[3],
-            uniforms.bias_offsets[3],
-            CoopVecMatrixLayout::InferencingOptimal,
-            CoopVecComponentType::Float16);
-        outputParams = exp(outputParams);
-
-        let outParams = float4(outputParams[0], outputParams[1], outputParams[2], outputParams[3]);
+        let outParams = Disney(NdotL, NdotV, NdotH, LdotH, roughness);
 
         // Calculate final color
         float3 Cdlin = baseColor;

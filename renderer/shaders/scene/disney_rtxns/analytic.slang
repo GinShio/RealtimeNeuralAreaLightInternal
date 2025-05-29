@@ -196,7 +196,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
         let outParams = Disney(NdotL, NdotV, NdotH, LdotH, roughness);
 
         // Calculate final color
-        float3 Cdlin = float3(pow(baseColor[0], 2.2), pow(baseColor[1], 2.2), pow(baseColor[2], 2.2));
+        float3 Cdlin = baseColor;
         float3 Cspec0 = lerp(specular * .08 * float3(1), Cdlin, metallic);
         float3 brdfn = outParams.x * Cdlin * (1 - metallic) + outParams.y * lerp(Cspec0, float3(1), outParams.z) + outParams.w;
         float3 colorh = max(brdfn * float3(NdotL), 0.0) * light.intensity * light.color;

@@ -5,6 +5,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use ash::vk;
+use glam::FloatExt;
 use rand::prelude::*;
 
 use crate::utils::save_mip_image;
@@ -31,9 +32,9 @@ struct FirstPhaseUniformBuffer {
     decoder_bias_offsets_2: [u32; 4],
 
     batch_size: u32,
-    learning_rate: f32,
     encoder_params_size: u32,
     decoder_params_size: u32,
+    texture_size: u32,
 }
 
 #[repr(C)]
@@ -41,7 +42,7 @@ struct FirstPhaseUniformBuffer {
 struct FirstPhasePushConstants {
     seed: u64,
     current_step: u32,
-    _padding: u32,
+    learning_rate: f32,
 }
 
 #[repr(C)]
@@ -83,7 +84,8 @@ pub fn train(
 ) -> Result<()> {
     let batch_size = 1 << 16;
     let batch_count = 100;
-    let learning_rate = 0.01;
+    let learning_rate_start = 1e-3;
+    let learning_rate_end = 1e-4;
 
     // ===========================
     // Prepare training
@@ -95,9 +97,10 @@ pub fn train(
     // output: latent vector (8)
     let encoder_dimensions = [(8, 64), (64, 64), (64, 64), (64, 64), (64, 8)];
 
-    // input: latent vector (8)
-    // middle: latent vector (8), transform frame (12)
-    // output: BRDF (3)
+    // transform frame input: latent vector (8)
+    // transform frame output: transform frame (12)
+    // decoder input: latent vector (8), transform frame (12)
+    // decoder output: BRDF (3)
     let decoder_dimensions = [(8, 12), (8 + 12, 64), (64, 64), (64, 64), (64, 3)];
 
     // Create encoder network
@@ -116,7 +119,7 @@ pub fn train(
     let latent_texture_total_pixel_count = {
         let mut pixel_count = 0;
         let mut width = texture_size as u64;
-        while width > 1 {
+        while width > 0 {
             pixel_count += width * width;
             width /= 2;
         }
@@ -218,8 +221,7 @@ pub fn train(
     let (latent_texture_params_buffer, latent_texture_params_buffer_allocation) =
         create_storage_buffer(
             state,
-            (latent_texture_total_pixel_count * 8 * std::mem::size_of::<f32>() as u64).div_ceil(4)
-                * 4,
+            latent_texture_total_pixel_count * 8 * std::mem::size_of::<f32>() as u64,
         )?;
     let (latent_texture_gradient_buffer, latent_texture_gradient_buffer_allocation) =
         create_storage_buffer(
@@ -1814,9 +1816,9 @@ pub fn train(
         decoder_bias_offsets_2: [decoder_network.bias_offsets[4], 0, 0, 0],
 
         batch_size,
-        learning_rate,
         encoder_params_size: encoder_total_params_count as u32,
         decoder_params_size: decoder_total_params_count as u32,
+        texture_size: texture_size as u32,
     };
     first_phase_uniform_buffer_allocation
         .mapped_slice_mut()
@@ -1847,7 +1849,7 @@ pub fn train(
             bytemuck::bytes_of(&FirstPhasePushConstants {
                 seed: 0,
                 current_step: 0,
-                _padding: 0,
+                learning_rate: learning_rate_start,
             }),
         );
         state.device.cmd_dispatch(
@@ -1876,6 +1878,7 @@ pub fn train(
     let mut rng = rand::rng();
     for i in 0..epochs {
         print!("\r  First Phase Epoch {}/{}", i + 1, epochs);
+        // print!("  First Phase Epoch {}/{}\n", i + 1, epochs);
         std::io::stdout().flush().expect("Failed to flush stdout");
 
         // begin command buffer
@@ -1887,6 +1890,10 @@ pub fn train(
 
         for j in 0..batch_count {
             let seed = rng.random();
+            let learning_rate = learning_rate_start.lerp(
+                learning_rate_end,
+                (i * batch_count + j) as f32 / (epochs * batch_count) as f32,
+            );
 
             // training pass
             unsafe {
@@ -1911,7 +1918,7 @@ pub fn train(
                     bytemuck::bytes_of(&FirstPhasePushConstants {
                         seed,
                         current_step: i * batch_count + j,
-                        _padding: 0,
+                        learning_rate,
                     }),
                 );
                 state
@@ -1967,7 +1974,7 @@ pub fn train(
                     bytemuck::bytes_of(&FirstPhasePushConstants {
                         seed,
                         current_step: i * batch_count + j,
-                        _padding: 0,
+                        learning_rate,
                     }),
                 );
                 state.device.cmd_dispatch(
@@ -2043,6 +2050,7 @@ pub fn train(
     }
 
     println!("\r  First Phase Epoch {}/{} - Done", epochs, epochs);
+    // println!("  First Phase Epoch {}/{} - Done", epochs, epochs);
 
     // === 2nd Phase ===
 
@@ -2079,7 +2087,7 @@ pub fn train(
         decoder_bias_offsets_2: [decoder_network.bias_offsets[4], 0, 0, 0],
 
         batch_size,
-        learning_rate,
+        learning_rate: learning_rate_end,
         latent_texture_pixel_size: latent_texture_total_pixel_count as u32,
         latent_texture_params_size: latent_texture_total_params_count as u32,
         decoder_params_size: decoder_total_params_count as u32,
@@ -2113,7 +2121,7 @@ pub fn train(
             second_phase_init_pipeline_layout,
             vk::ShaderStageFlags::COMPUTE,
             0,
-            bytemuck::bytes_of(&FirstPhasePushConstants {
+            bytemuck::bytes_of(&SecondPhasePushConstants {
                 seed: 0,
                 current_step: 0,
                 _padding: 0,
@@ -2146,6 +2154,7 @@ pub fn train(
     let mut rng = rand::rng();
     for i in 0..epochs {
         print!("\r  Second Phase Epoch {}/{}", i + 1, epochs);
+        // print!("  Second Phase Epoch {}/{}\n", i + 1, epochs);
         std::io::stdout().flush().expect("Failed to flush stdout");
 
         // begin command buffer
@@ -2178,7 +2187,7 @@ pub fn train(
                     second_phase_train_pipeline_layout,
                     vk::ShaderStageFlags::COMPUTE,
                     0,
-                    bytemuck::bytes_of(&FirstPhasePushConstants {
+                    bytemuck::bytes_of(&SecondPhasePushConstants {
                         seed,
                         current_step: i * batch_count + j,
                         _padding: 0,
@@ -2234,7 +2243,7 @@ pub fn train(
                     second_phase_optimize_pipeline_layout,
                     vk::ShaderStageFlags::COMPUTE,
                     0,
-                    bytemuck::bytes_of(&FirstPhasePushConstants {
+                    bytemuck::bytes_of(&SecondPhasePushConstants {
                         seed,
                         current_step: i * batch_count + j,
                         _padding: 0,
@@ -2325,7 +2334,7 @@ pub fn train(
                     latent_texture_params_buffer,
                     latent_texture_params_cpu_buffer,
                     &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
-                        latent_texture_total_params_count * std::mem::size_of::<half::f16>() as u64,
+                        latent_texture_total_params_count * std::mem::size_of::<f32>() as u64,
                     )],
                 );
                 state.device.cmd_copy_buffer(
@@ -2384,6 +2393,52 @@ pub fn train(
     }
 
     println!("\r  Second Phase Epoch {}/{} - Done", epochs, epochs);
+    // println!("  Second Phase Epoch {}/{} - Done", epochs, epochs);
+
+    let command_buffer = state.begin_single_time_commands();
+
+    // copy params to CPU buffer
+    unsafe {
+        state.device.cmd_copy_buffer(
+            command_buffer,
+            latent_texture_params_buffer,
+            latent_texture_params_cpu_buffer,
+            &[vk::BufferCopy::default()
+                .src_offset(0)
+                .dst_offset(0)
+                .size(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)],
+        );
+        state.device.cmd_copy_buffer(
+            command_buffer,
+            decoder_network_params_buffer,
+            decoder_network_params_cpu_buffer,
+            &[vk::BufferCopy::default()
+                .src_offset(0)
+                .dst_offset(0)
+                .size(decoder_total_params_count * std::mem::size_of::<half::f16>() as u64)],
+        );
+    }
+
+    state.end_single_time_commands(command_buffer);
+
+    let latent_texture_data = latent_texture_params_cpu_buffer_allocation
+        .mapped_slice()
+        .expect("Failed to allocate CPU buffer for latent texture params");
+    save_mip_image(latent_texture_data, texture_size, "./network/disney-rtnam/")?;
+
+    let decoder_data = decoder_network_params_cpu_buffer_allocation
+        .mapped_slice()
+        .expect("Failed to map network params CPU buffer")
+        .to_vec();
+
+    let decoder_trained_network = TrainedNetwork::from_data(
+        &state.cooperative_vector_fn,
+        &decoder_data,
+        &decoder_network.weight_offsets,
+        &decoder_network.bias_offsets,
+        &decoder_dimensions,
+    )?;
+    decoder_trained_network.save_network("./network/disney-rtnam/decoder.json")?;
 
     let elapsed = start.elapsed();
     let minutes = elapsed.as_secs() / 60;

@@ -94,12 +94,17 @@ void main(uint3 tid: SV_DispatchThreadID)
             decoderNetworkParams[i] = (half)adjustedWeightbias;
         }
 
+        // if (i == uniforms.decoderBiasOffsets1[0])
+        // {
+        //     printf("Decoder bias: %f\n", decoderNetworkParams[i / 2]);
+        // }
     }
     else
     {
         i -= uniforms.decoderParamsSize;
 
-        for (var j = 0; j < 8; j++) {
+        for (var j = 0; j < 8; j++)
+        {
             let index = latentTextureGradientIndex[i] * 8 + j;
 
             uint stepCount = 0;
@@ -112,7 +117,8 @@ void main(uint3 tid: SV_DispatchThreadID)
             {
                 // lock for index
                 uint outValue = 0;
-                do {
+                do
+                {
                     InterlockedCompareExchange(latentTextureLock[index], 1, 0, outValue);
                 } while (outValue != 0);
 

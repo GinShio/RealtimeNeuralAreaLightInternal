@@ -1869,6 +1869,7 @@ dependencies = [
  "ash",
  "ash-window",
  "bytemuck",
+ "exr",
  "glam",
  "gltf",
  "gpu-allocator",

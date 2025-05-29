@@ -19,6 +19,7 @@ struct PushConstants
 {
     uint64_t seed;
     uint currentStep;
+    float learningRate;
 }
 
 [[push_constant]]
@@ -37,9 +38,9 @@ struct UniformBuffer
     uint4 decoderBiasOffsets2;
 
     uint batchSize;
-    float learningRate;
     uint encoderParamsSize;
     uint decoderParamsSize;
+    uint textureSize;
 }
 
 [[vk::binding(0)]]
@@ -66,14 +67,14 @@ Sampler2D roughnessMetallicSampler;
 [[vk::binding(7)]]
 Sampler2D normalSampler;
 
-
-
-struct Model {
+struct Model
+{
     __init(
         StructuredBuffer<half> encoderMatrixBuffer,
         RWStructuredBuffer<half> encoderDerivativeBuffer,
         StructuredBuffer<half> decoderMatrixBuffer,
-        RWStructuredBuffer<half> decoderDerivativeBuffer) {
+        RWStructuredBuffer<half> decoderDerivativeBuffer)
+    {
         encoderParameters = MatrixBiasBuffer<half>(encoderMatrixBuffer);
         encoderDerivatives = MatrixBiasBufferDifferential<half>(encoderDerivativeBuffer);
         decoderParameters = MatrixBiasBuffer<half>(decoderMatrixBuffer);
@@ -84,7 +85,8 @@ struct Model {
     private static func transformComponentFunc(
         normal: float3,
         tangent: float3,
-        no_diff v: float3) -> float3
+        no_diff v: float3)
+        ->float3
     {
         // normal = normalize(normal);
         // tangent = normalize(tangent - dot(tangent, normal) * normal);
@@ -97,7 +99,8 @@ struct Model {
     private static func transformFrameFunc(
         transformFrameInput: CoopVec<half, 12>,
         no_diff wi: float3,
-        no_diff wo: float3) -> CoopVec<half, 12>
+        no_diff wo: float3)
+        ->CoopVec<half, 12>
     {
         CoopVec<half, 12> result;
         for (var i = 0; i < 2; i++)
@@ -147,31 +150,25 @@ struct Model {
                 transformFrameInput.p[i * 6 + 0],
                 transformFrameInput.p[i * 6 + 1],
                 transformFrameInput.p[i * 6 + 2]);
-            var normalD = float3(
-                transformFrameInput.d[i * 6 + 0],
-                transformFrameInput.d[i * 6 + 1],
-                transformFrameInput.d[i * 6 + 2]);
+            var normalD = float3(0.0);
             var normal = diffPair(normalP, normalD);
 
             var tangentP = float3(
                 transformFrameInput.p[i * 6 + 3],
                 transformFrameInput.p[i * 6 + 4],
                 transformFrameInput.p[i * 6 + 5]);
-            var tangentD = float3(
-                transformFrameInput.d[i * 6 + 3],
-                transformFrameInput.d[i * 6 + 4],
-                transformFrameInput.d[i * 6 + 5]);
+            var tangentD = float3(0.0);
             var tangent = diffPair(tangentP, tangentD);
 
             bwd_diff(transformComponentFunc)(normal, tangent, wi, wiTBNGrad);
             bwd_diff(transformComponentFunc)(normal, tangent, wo, woTBNGrad);
 
-            transformFrameInputGrad[i * 6 + 0] += half(normal.d.x);
-            transformFrameInputGrad[i * 6 + 1] += half(normal.d.y);
-            transformFrameInputGrad[i * 6 + 2] += half(normal.d.z);
-            transformFrameInputGrad[i * 6 + 3] += half(tangent.d.x);
-            transformFrameInputGrad[i * 6 + 4] += half(tangent.d.y);
-            transformFrameInputGrad[i * 6 + 5] += half(tangent.d.z);
+            transformFrameInputGrad[i * 6 + 0] = half(normal.d.x);
+            transformFrameInputGrad[i * 6 + 1] = half(normal.d.y);
+            transformFrameInputGrad[i * 6 + 2] = half(normal.d.z);
+            transformFrameInputGrad[i * 6 + 3] = half(tangent.d.x);
+            transformFrameInputGrad[i * 6 + 4] = half(tangent.d.y);
+            transformFrameInputGrad[i * 6 + 5] = half(tangent.d.z);
         }
         transformFrameInput = diffPair(
             transformFrameInput.p,
@@ -180,7 +177,8 @@ struct Model {
 
     private static func combineLatentVectorAndTransformFrame(
         latentVector: CoopVec<half, 8>,
-        transformFrameOutput: CoopVec<half, 12>) -> CoopVec<half, 20>
+        transformFrameOutput: CoopVec<half, 12>)
+        ->CoopVec<half, 20>
     {
         CoopVec<half, 20> result;
         for (var i = 0; i < 8; i++)
@@ -200,19 +198,19 @@ struct Model {
         inout transformFrameOutput: DifferentialPair<CoopVec<half, 12>>,
         grad: CoopVec<half, 20>.Differential)
     {
-        var latentVectorGrad = latentVector.d;
+        CoopVec<half, 8> latentVectorGrad;
         for (var i = 0; i < 8; i++)
         {
-            latentVectorGrad[i] += grad[i];
+            latentVectorGrad[i] = grad[i];
         }
         latentVector = diffPair(
             latentVector.p,
             latentVectorGrad);
 
-        var transformFrameOutputGrad = transformFrameOutput.d;
+        CoopVec<half, 12> transformFrameOutputGrad;
         for (var i = 0; i < 12; i++)
         {
-            transformFrameOutputGrad[i] += grad[i + 8];
+            transformFrameOutputGrad[i] = grad[i + 8];
         }
         transformFrameOutput = diffPair(
             transformFrameOutput.p,
@@ -225,8 +223,8 @@ struct Model {
         no_diff wi: float3,
         no_diff wo: float3,
         encoderParams: MatrixBiasBuffer<half>,
-        decoderParams: MatrixBiasBuffer<half>,
-    )->CoopVec<half, 3>
+        decoderParams: MatrixBiasBuffer<half>, )
+        ->CoopVec<half, 3>
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
@@ -295,6 +293,9 @@ struct Model {
             componentType);
         latentVector = encoderFinalAct.eval(latentVector);
 
+        // decoder
+        CoopVec<half, 3> output;
+
         // decoder transform frame
         CoopVec<half, 12> transformFrameInput;
         transformFrameInput = LinearOp<half, 12, 8>(
@@ -311,9 +312,6 @@ struct Model {
             wi,
             wo);
 
-        // // decoder
-        CoopVec<half, 3> output;
-
         // decoder input
         CoopVec<half, 20> decoderInputParams;
         decoderInputParams = combineLatentVectorAndTransformFrame(
@@ -329,7 +327,6 @@ struct Model {
                 uniforms.decoderBiasOffsets1[1]),
             matrixLayout,
             componentType);
-        hidden = act.eval(hidden);
 
         // decoder 2nd layer
         hidden = LinearOp<half, 64, 64>(
@@ -403,6 +400,61 @@ struct Model {
     MatrixBiasBufferDifferential<half> decoderDerivatives;
 }
 
+func localToTangent(v: float3)->float3x3
+{
+    let up = abs(v.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    let tangent = normalize(cross(up, v));
+    let bitangent = cross(v, tangent);
+    return float3x3(tangent, bitangent, v);
+}
+
+func sampleWiWo(
+    inout rng: PCG32,
+    out wi: float3,
+    out wo: float3)
+{
+    let thetaH = acos(sqrt(1.0 - rng.nextFloat()));
+    let phiH = 2.0 * PI * rng.nextFloat();
+    let H = float3(
+        sin(thetaH) * cos(phiH),
+        sin(thetaH) * sin(phiH),
+        cos(thetaH));
+
+    let thetaDelta = acos(sqrt(1.0 - rng.nextFloat()));
+    let phiDelta = 2.0 * PI * rng.nextFloat();
+    let delta = float3(
+        sin(thetaDelta) * cos(phiDelta),
+        sin(thetaDelta) * sin(phiDelta),
+        cos(thetaDelta));
+
+    let M = localToTangent(H);
+    let d = mul(M, delta);
+
+    wi = normalize(d);
+    wo = 2.0 * dot(wi, H) * H - wi;
+}
+
+func computeMipCount(width: int)->int
+{
+    return int(floor(log2(float(width)))) + 1;
+}
+
+func sampleMipLevel(u: float, mipCount: int)->float
+{
+    let bias = log(2.0);
+    let l_max = float(mipCount - 1);
+    let l = -log(1.0 - u) / bias;
+    return clamp(l, 0.0, l_max);
+}
+
+func srgbToLinear(color: float3)->float3
+{
+    let useLinear = color <= 0.04045;
+    let v1 = color / 12.92;
+    let v2 = pow((color + 0.055) / 1.055, 2.4);
+    return select(useLinear, v1, v2);
+}
+
 func createTbn(v: float3, normal: float3)
     ->float3x3
 {
@@ -416,28 +468,56 @@ func createTbn(v: float3, normal: float3)
 func actualBrdfFunc(wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
 {
     // TODO filtering and mollification
+    let mipLevelFloor = floor(mipLevel);
 
-    let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);
-    let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
-    let normal = normalSampler.SampleLevel(uv, mipLevel).xyz * 2 - 1;
-    let roughness = metallicRoughness.y;
-    let metallic = metallicRoughness.x;
+    let baseColor = baseColorSampler.SampleLevel(uv, mipLevelFloor);
+    let metallicRoughness =
+        roughnessMetallicSampler.SampleLevel(uv, mipLevelFloor);
+    let normal = normalSampler.SampleLevel(uv, mipLevelFloor).xyz * 2 - 1;
+    let roughness = metallicRoughness.g;
+    let metallic = metallicRoughness.b;
 
     let TBN = createTbn(wo, normal);
 
     let wi_tangent = mul(TBN, wi);
     let wo_tangent = mul(TBN, wo);
-    return DisneyBRDF(wi_tangent, wo_tangent, baseColor.rgb, roughness, metallic);
+    return DisneyBRDF(wi_tangent, wo_tangent, srgbToLinear(baseColor.rgb), roughness, metallic);
+}
+
+[Differentiable]
+func log1p4(x: float)->float
+{
+    var ret = x;
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    return ret;
+}
+
+[Differentiable]
+func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)->float
+{
+    var loss : float = 0.0;
+    for (var i = 0; i < 3; ++i)
+    {
+        let t = log1p4(target[i]);
+        let p = log1p4(predicted[i]);
+        loss += abs(t - p);
+    }
+    return loss * scale;
 }
 
 func LogL1LossDerivative(
-    actual: float3,
+    target: float3,
     predicted: float3,
-    scale: float) -> float3
+    scale: float,
+    loss: float)
+    ->float3
 {
-    let signDiff = sign(actual - predicted);
-
-    return scale * signDiff / (predicted + 0.01);
+    var predictedD = diffPair(predicted, float3(0.0));
+    bwd_diff(LogL1Loss)(target, predictedD, scale, loss);
+    return predictedD.d;
 }
 
 [numthreads(64, 1, 1)]
@@ -451,13 +531,14 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     PCG32 rng = PCG32(pc.seed, i);
 
-    // calc wi and wo
-    float3 wi = normalize(float3(rng.nextFloat(), rng.nextFloat(), rng.nextFloat() * 2.0 - 1.0));
-    float3 wo = normalize(float3(rng.nextFloat(), rng.nextFloat(), rng.nextFloat() * 2.0 - 1.0));
+    // sample wi and wo
+    float3 wi;
+    float3 wo;
+    sampleWiWo(rng, wi, wo);
 
     // sample uv
     let uv = float2(rng.nextFloat(), rng.nextFloat());
-    let mipLevel = 0;
+    let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
 
     // calculate actual BRDF
     let actualBrdf = actualBrdfFunc(wi, wo, uv, mipLevel);
@@ -465,7 +546,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     // calculate model BRDF
     let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);
     let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
-    let normal = normalSampler.SampleLevel(uv, mipLevel).xyz * 2 - 1;
+    let normal = normalSampler.SampleLevel(uv, mipLevel);
     let roughness = metallicRoughness.y;
     let metallic = metallicRoughness.x;
 
@@ -482,8 +563,9 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // calculate loss
     let scale = LOSS_SCALE / (uniforms.batchSize * 3);
-    let loss = LogL1LossDerivative(actualBrdf, predictedBrdf, scale);
+    let loss = LogL1Loss(actualBrdf, predictedBrdf, scale);
+    let lossD = LogL1LossDerivative(actualBrdf, predictedBrdf, scale, loss);
 
     // backward
-    model.backward(input, wi, wo, HCoopVec<3>(loss[0], loss[1], loss[2]));
+    model.backward(input, wi, wo, HCoopVec<3>(lossD[0], lossD[1], lossD[2]));
 }

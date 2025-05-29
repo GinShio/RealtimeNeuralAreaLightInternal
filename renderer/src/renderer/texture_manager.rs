@@ -1,5 +1,8 @@
+use std::path::Path;
+
 use anyhow::Result;
 use ash::vk;
+use exr::prelude::*;
 use gpu_allocator::MemoryLocation;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme};
 
@@ -422,6 +425,254 @@ impl TextureManager {
             width,
             height,
             format,
+        };
+        self.textures.push(texture);
+
+        // Bind the image view to the descriptor set
+        let image_info = [vk::DescriptorImageInfo::default()
+            .image_view(image_view)
+            .image_layout(vk::ImageLayout::READ_ONLY_OPTIMAL)];
+        let write_descriptor_set = vk::WriteDescriptorSet::default()
+            .dst_set(self.texture_descriptor_set)
+            .dst_array_element(self.current_texture_index)
+            .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+            .dst_binding(0)
+            .image_info(&image_info);
+        unsafe {
+            state
+                .device
+                .update_descriptor_sets(&[write_descriptor_set], &[]);
+        }
+        let index = TextureIndex(self.current_texture_index);
+        self.current_texture_index += 1;
+
+        Ok(index)
+    }
+
+    pub fn load_latent_texture(
+        &mut self,
+        state: &mut VulkanState,
+        path: impl AsRef<Path>,
+    ) -> Result<TextureIndex> {
+        let path = path.as_ref();
+
+        // load mip images
+        let mut mip_images = vec![];
+        let mut mip_level = 0;
+        let mut mip0_width = 0;
+        let mut mip0_height = 0;
+        loop {
+            let mip_path = path.with_file_name(format!(
+                "{}.mip{}.exr",
+                path.file_stem().unwrap().to_string_lossy(),
+                mip_level
+            ));
+            if !mip_path.exists() {
+                break;
+            }
+            // load as exr f16 RGBA
+            let image = read_first_rgba_layer_from_file(
+                &mip_path,
+                |size, _| vec![vec![[half::f16::ZERO; 4]; size.x()]; size.y()],
+                |pixels, position, (r, g, b, a)| {
+                    pixels[position.y()][position.x()] = [r, g, b, a];
+                },
+            )?;
+            let width = image.layer_data.size.width();
+            let height = image.layer_data.size.height();
+            let data = image
+                .layer_data
+                .channel_data
+                .pixels
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            mip_images.push(data);
+            if mip_level == 0 {
+                mip0_width = width as u32;
+                mip0_height = height as u32;
+            }
+            mip_level += 1;
+        }
+        if mip_images.is_empty() {
+            anyhow::bail!("No mip images found for {:?}", path);
+        }
+        let mip_levels = mip_images.len() as u32;
+
+        // Create vk::Image
+        let image_create_info = vk::ImageCreateInfo::default()
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::R16G16B16A16_SFLOAT)
+            .extent(vk::Extent3D {
+                width: mip0_width,
+                height: mip0_height,
+                depth: 1,
+            })
+            .mip_levels(mip_levels)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let image = unsafe { state.device.create_image(&image_create_info, None)? };
+        let mem_req = unsafe { state.device.get_image_memory_requirements(image) };
+        let allocation =
+            state
+                .allocator()
+                .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
+                    name: "latent texture",
+                    requirements: mem_req,
+                    location: gpu_allocator::MemoryLocation::GpuOnly,
+                    linear: false,
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+                })?;
+        unsafe {
+            state
+                .device
+                .bind_image_memory(image, allocation.memory(), allocation.offset())?;
+        }
+
+        // Upload mip image data
+        for (level, mip) in mip_images.iter().enumerate() {
+            let command_buffer = state.begin_single_time_commands();
+
+            let w = (mip0_width >> level).max(1);
+            let h = (mip0_height >> level).max(1);
+            let flat: Vec<u8> = mip
+                .iter()
+                .flat_map(|px| px.iter().flat_map(|c| c.to_le_bytes()))
+                .collect();
+
+            // staging buffer
+            let buffer_info = vk::BufferCreateInfo::default()
+                .size(flat.len() as u64)
+                .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            let staging_buffer = unsafe { state.device.create_buffer(&buffer_info, None)? };
+            let staging_mem_req =
+                unsafe { state.device.get_buffer_memory_requirements(staging_buffer) };
+            let mut staging_alloc =
+                state
+                    .allocator()
+                    .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
+                        name: "latent texture staging",
+                        requirements: staging_mem_req,
+                        location: gpu_allocator::MemoryLocation::CpuToGpu,
+                        linear: true,
+                        allocation_scheme:
+                            gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+                    })?;
+            unsafe {
+                state.device.bind_buffer_memory(
+                    staging_buffer,
+                    staging_alloc.memory(),
+                    staging_alloc.offset(),
+                )?;
+            }
+            staging_alloc
+                .mapped_slice_mut()
+                .expect("Failed to map staging buffer memory")
+                .copy_from_slice(&flat);
+
+            // Barrier
+            let subresource = vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: level as u32,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+            let barrier = vk::ImageMemoryBarrier::default()
+                .image(image)
+                .subresource_range(subresource)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE);
+            unsafe {
+                state.device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[barrier],
+                );
+            }
+
+            // Copy
+            let region = vk::BufferImageCopy::default()
+                .image_subresource(
+                    vk::ImageSubresourceLayers::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .mip_level(level as u32)
+                        .layer_count(1),
+                )
+                .image_extent(vk::Extent3D {
+                    width: w,
+                    height: h,
+                    depth: 1,
+                });
+            unsafe {
+                state.device.cmd_copy_buffer_to_image(
+                    command_buffer,
+                    staging_buffer,
+                    image,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &[region],
+                );
+            }
+
+            // Change image layout to SHADER_READ_ONLY_OPTIMAL
+            let barrier2 = vk::ImageMemoryBarrier::default()
+                .image(image)
+                .subresource_range(subresource)
+                .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                .dst_access_mask(vk::AccessFlags::SHADER_READ);
+            unsafe {
+                state.device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[barrier2],
+                );
+            }
+            state.end_single_time_commands(command_buffer);
+
+            unsafe {
+                state.device.destroy_buffer(staging_buffer, None);
+            }
+            state.allocator().free(staging_alloc)?;
+        }
+
+        // Create image view
+        let image_view_info = vk::ImageViewCreateInfo::default()
+            .image(image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(vk::Format::R16G16B16A16_SFLOAT)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: mip_levels,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+        let image_view = unsafe { state.device.create_image_view(&image_view_info, None)? };
+
+        // 6. Texture構造体をpush
+        let texture = Texture {
+            image,
+            image_view,
+            allocation: Some(allocation),
+            width: mip0_width,
+            height: mip0_height,
+            format: vk::Format::R16G16B16A16_SFLOAT,
         };
         self.textures.push(texture);
 

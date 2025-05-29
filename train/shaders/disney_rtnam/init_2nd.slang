@@ -88,15 +88,17 @@ Sampler2D roughnessMetallicSampler;
 [[vk::binding(15)]]
 Sampler2D normalSampler;
 
-struct EncoderModel {
-    __init(StructuredBuffer<half> encoderMatrixBuffer) {
+struct EncoderModel
+{
+    __init(StructuredBuffer<half> encoderMatrixBuffer)
+    {
         encoderParameters = MatrixBiasBuffer<half>(encoderMatrixBuffer);
     }
 
     static func forward_s(
         no_diff input: CoopVec<half, 8>,
-        encoderParams: MatrixBiasBuffer<half>,
-    )->CoopVec<half, 8>
+        encoderParams: MatrixBiasBuffer<half>, )
+        ->CoopVec<half, 8>
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
@@ -169,7 +171,7 @@ struct EncoderModel {
     }
 
     [mutating]
-    func forward(input: CoopVec<half, 8>) -> CoopVec<half, 8>
+    func forward(input: CoopVec<half, 8>)->CoopVec<half, 8>
     {
         return forward_s(input, encoderParameters);
     }
@@ -204,8 +206,8 @@ void main(uint3 tid: SV_DispatchThreadID)
 
         // calculate UV
         let uv = float2(
-            (i - currentPixelOffset) % currentMipSize,
-            (i - currentPixelOffset) / currentMipSize);
+            float((i - currentPixelOffset) % currentMipSize) / float(currentMipSize),
+            float((i - currentPixelOffset) / currentMipSize) / float(currentMipSize));
 
         // Sample parameters from textures
         let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);
@@ -217,11 +219,11 @@ void main(uint3 tid: SV_DispatchThreadID)
             half(baseColor.r),
             half(baseColor.g),
             half(baseColor.b),
-            half(roughnessMetallic.r),
-            half(roughnessMetallic.g),
-            half(roughnessMetallic.b),
-            half(normal.r),
-            half(normal.g)
+            half(roughnessMetallic.y),
+            half(roughnessMetallic.x),
+            half(normal.x),
+            half(normal.y),
+            half(normal.z)
         };
         var model = EncoderModel(encoderNetworkParams);
         CoopVec<half, 8> param = model.forward(input);
@@ -229,7 +231,7 @@ void main(uint3 tid: SV_DispatchThreadID)
         // Init parameters
         for (uint j = 0; j < 8; j++)
         {
-            latentTextureParams[i * 8 + j] = float(input[j]);
+            latentTextureParams[i * 8 + j] = float(param[j]);
             latentTextureMoments1[i * 8 + j] = 0.0f;
             latentTextureMoments2[i * 8 + j] = 0.0f;
         }

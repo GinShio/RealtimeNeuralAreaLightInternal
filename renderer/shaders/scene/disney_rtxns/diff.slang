@@ -270,7 +270,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
         let outParams = float4(outputParams[0], outputParams[1], outputParams[2], outputParams[3]);
 
         // Calculate final color
-        float3 Cdlin = float3(pow(baseColor[0], 2.2), pow(baseColor[1], 2.2), pow(baseColor[2], 2.2));
+        float3 Cdlin = baseColor;
         float3 Cspec0 = lerp(specular * .08 * float3(1), Cdlin, metallic);
         float3 brdfn = outParams.x * Cdlin * (1 - metallic) + outParams.y * lerp(Cspec0, float3(1), outParams.z) + outParams.w;
         float3 colorh = max(brdfn * float3(NdotL), 0.0) * light.intensity * light.color;
@@ -278,11 +278,8 @@ func fsMain(input: VertexOutput)->FragmentOutput
         mlpColor += (NdotL > 0.0 && NdotV > 0.0) ? colorh : 0.0;
     }
 
-    let analyticColorLinear = srgbToLinear(analyticColor);
-    let mlpColorLinear = srgbToLinear(mlpColor);
-
-    let diffValue = length(mlpColorLinear - analyticColorLinear);
-    let signDiff = length(mlpColorLinear) > length(analyticColor) ? 1.0 : -1.0;
+    let diffValue = length(mlpColor - analyticColor);
+    let signDiff = length(mlpColor) > length(analyticColor) ? 1.0 : -1.0;
 
     var diffColor = float3(0.0, 0.0, 0.0);
     if (signDiff < 0.0)

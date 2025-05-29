@@ -2,6 +2,7 @@ struct PushConstants
 {
     uint64_t seed;
     uint currentStep;
+    float learningRate;
 }
 
 [[push_constant]]
@@ -20,9 +21,9 @@ struct UniformBuffer
     uint4 decoderBiasOffsets2;
 
     uint batchSize;
-    float learningRate;
     uint encoderParamsSize;
     uint decoderParamsSize;
+    uint textureSize;
 }
 
 [[vk::binding(0)]]

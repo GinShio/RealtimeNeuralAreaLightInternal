@@ -5,10 +5,12 @@ use crate::renderer::{
 };
 
 mod damaged_helmet;
+mod disney_rtnam;
 mod disney_rtxns;
 mod triangle;
 
 pub use damaged_helmet::DamagedHelmetScene;
+pub use disney_rtnam::DisneyRtnamScene;
 pub use disney_rtxns::DisneyRtxnsScene;
 pub use triangle::TriangleScene;
 

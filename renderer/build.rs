@@ -135,6 +135,42 @@ fn main() {
             "fragment",
             "fsMain",
         ),
+        (
+            "scene/disney_rtnam/mlp.slang",
+            "scene/disney_rtnam/mlp.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/disney_rtnam/mlp.slang",
+            "scene/disney_rtnam/mlp.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
+        (
+            "scene/disney_rtnam/analytic.slang",
+            "scene/disney_rtnam/analytic.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/disney_rtnam/analytic.slang",
+            "scene/disney_rtnam/analytic.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
+        (
+            "scene/disney_rtnam/diff.slang",
+            "scene/disney_rtnam/diff.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/disney_rtnam/diff.slang",
+            "scene/disney_rtnam/diff.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
     ];
 
     // Watch all .slang files in the shader directory

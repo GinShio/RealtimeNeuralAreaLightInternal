@@ -13,9 +13,10 @@ pub fn save_mip_image(data: &[u8], width: u32, save_dir: impl AsRef<Path>) -> Re
         std::fs::create_dir_all(save_dir)?;
     }
 
+    let mut current_mip_level = 0;
     while current_mip_width > 0 {
         let pixel_count = (current_mip_width * current_mip_width) as usize;
-        let mip_size = pixel_count * 4 * std::mem::size_of::<f32>();
+        let mip_size = pixel_count * 8 * std::mem::size_of::<f32>();
 
         if data_offset + mip_size > data.len() {
             anyhow::bail!("Data size is smaller than expected for the mip level");
@@ -24,48 +25,52 @@ pub fn save_mip_image(data: &[u8], width: u32, save_dir: impl AsRef<Path>) -> Re
         let mip_data = &data[data_offset..data_offset + mip_size];
 
         // u8 -> f16 RGBA
-        let f16_pixels: Vec<[f16; 4]> = mip_data
-            .chunks_exact(16) // 4ch * 2bytes
-            .map(|chunk| {
-                [
-                    f32::from_bits(u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]])),
-                    f32::from_bits(u32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]])),
-                    f32::from_bits(u32::from_le_bytes([
-                        chunk[8], chunk[9], chunk[10], chunk[11],
-                    ])),
-                    f32::from_bits(u32::from_le_bytes([
-                        chunk[12], chunk[13], chunk[14], chunk[15],
-                    ])),
-                ]
-            })
+        let f16_pixels: (Vec<[f16; 4]>, Vec<[f16; 4]>) = bytemuck::cast_slice(mip_data)
+            .chunks_exact(8)
             .map(|px| {
-                [
-                    f16::from_f32(px[0]),
-                    f16::from_f32(px[1]),
-                    f16::from_f32(px[2]),
-                    f16::from_f32(px[3]),
-                ]
+                (
+                    [
+                        f16::from_f32(px[0]),
+                        f16::from_f32(px[1]),
+                        f16::from_f32(px[2]),
+                        f16::from_f32(px[3]),
+                    ],
+                    [
+                        f16::from_f32(px[4]),
+                        f16::from_f32(px[5]),
+                        f16::from_f32(px[6]),
+                        f16::from_f32(px[7]),
+                    ],
+                )
             })
             .collect();
 
-        let mip_path = save_dir.join(format!("latent-texture.{}.exr", current_mip_width));
+        let mip_path = save_dir.join(format!("latent-texture-0.mip{}.exr", current_mip_level));
 
-        let width_usize = current_mip_width as usize;
-        let height_usize = current_mip_width as usize;
-        let rgba_pixels = &f16_pixels;
+        let width = current_mip_width as usize;
+        let height = current_mip_width as usize;
+        let rgba_pixels = &f16_pixels.0;
 
-        write_rgba_file(
-            mip_path.to_str().unwrap(),
-            width_usize,
-            height_usize,
-            |x, y| {
-                let idx = y * width_usize + x;
-                let px = rgba_pixels[idx];
-                (px[0], px[1], px[2], px[3])
-            },
-        )?;
+        write_rgba_file(mip_path.to_str().unwrap(), width, height, |x, y| {
+            let idx = y * width + x;
+            let px = rgba_pixels[idx];
+            (px[0], px[1], px[2], px[3])
+        })?;
+
+        let mip_path = save_dir.join(format!("latent-texture-1.mip{}.exr", current_mip_level));
+
+        let width = current_mip_width as usize;
+        let height = current_mip_width as usize;
+        let rgba_pixels = &f16_pixels.1;
+
+        write_rgba_file(mip_path.to_str().unwrap(), width, height, |x, y| {
+            let idx = y * width + x;
+            let px = rgba_pixels[idx];
+            (px[0], px[1], px[2], px[3])
+        })?;
 
         current_mip_width /= 2;
+        current_mip_level += 1;
         data_offset += mip_size;
     }
 

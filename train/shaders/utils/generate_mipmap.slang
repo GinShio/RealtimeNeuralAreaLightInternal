@@ -22,9 +22,8 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     uint dst_height = max(pc.src_height >> 1, 1);
 
     if (dst_coord.x >= dst_width || dst_coord.y >= dst_height)
-        return; 
+        return;
 
-    // src_mip_levelの座標
     uint2 src_coord0 = dst_coord * 2;
     uint2 src_coord1 = src_coord0 + uint2(1, 0);
     uint2 src_coord2 = src_coord0 + uint2(0, 1);

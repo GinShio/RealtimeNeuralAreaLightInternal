@@ -45,16 +45,12 @@ pub fn create_texture_with_mipmap(
 ) -> Texture {
     // Create DynamicImage from vk::Format
     let img = match format {
-        vk::Format::R8G8B8A8_UNORM | vk::Format::R8G8B8A8_SRGB => {
-            image::RgbaImage::from_raw(width, height, data.to_vec())
-                .map(DynamicImage::ImageRgba8)
-                .expect("Invalid RGBA8 image")
-        }
-        vk::Format::R8G8B8_UNORM | vk::Format::R8G8B8_SRGB => {
-            image::RgbImage::from_raw(width, height, data.to_vec())
-                .map(DynamicImage::ImageRgb8)
-                .expect("Invalid RGB8 image")
-        }
+        vk::Format::R8G8B8A8_UNORM => image::RgbaImage::from_raw(width, height, data.to_vec())
+            .map(DynamicImage::ImageRgba8)
+            .expect("Invalid RGBA8 image"),
+        vk::Format::R8G8B8_UNORM => image::RgbImage::from_raw(width, height, data.to_vec())
+            .map(DynamicImage::ImageRgb8)
+            .expect("Invalid RGB8 image"),
         vk::Format::R16G16B16A16_UNORM => {
             let raw: Vec<u16> = data
                 .chunks_exact(2)
@@ -246,7 +242,7 @@ pub fn create_texture_with_mipmap(
         );
     }
 
-    // Buffer copy
+    // Buffer image copy
     let buffer_image_copy = vk::BufferImageCopy::default()
         .buffer_offset(0)
         .buffer_row_length(0)

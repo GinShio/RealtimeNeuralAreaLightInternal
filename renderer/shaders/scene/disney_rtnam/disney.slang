@@ -1,3 +1,15 @@
+/*
+ * Copyright (c) 2015 - 2025, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * NVIDIA CORPORATION and its licensors retain all intellectual property
+ * and proprietary rights in and to this software, related documentation
+ * and any modifications thereto.  Any use, reproduction, disclosure or
+ * distribution of this software and related documentation without an express
+ * license agreement from NVIDIA CORPORATION is strictly prohibited.
+ */
+
+//----------- Core part of the shader
+
 const static float PI = 3.14159265358979323846;
 
 float SchlickFresnel(float u)
@@ -56,26 +68,4 @@ float4 Disney(float NdotL, float NdotV, float NdotH, float LdotH, float roughnes
     float Gr = SmithGGX(NdotL, .25f) * SmithGGX(NdotV, .25f);
 
     return float4((1 / PI) * ss, Gs * Ds, FH, .25 * Gr * Fr * Dr);
-}
-
-func DisneyBRDF(wi: float3, wo: float3, baseColor: float3, roughness: float, metallic: float)->float3
-{
-    let specular = 0.5;
-
-    let NdotL = wi.z;
-    let NdotV = wo.z;
-
-    if (NdotL <= 0 || NdotV <= 0)
-        return float3(0, 0, 0);
-
-    let H = normalize(wi + wo);
-    let NdotH = H.z;
-    let LdotH = dot(wi, H);
-
-    let disneyParams = Disney(NdotL, NdotV, NdotH, LdotH, roughness);
-
-    let C_specular = lerp(specular * 0.08 * 1.0, baseColor, metallic);
-    let brdf = disneyParams.x * baseColor * (1.0 - metallic) + disneyParams.y * lerp(C_specular, 1.0, disneyParams.z) + disneyParams.w;
-
-    return brdf;
 }

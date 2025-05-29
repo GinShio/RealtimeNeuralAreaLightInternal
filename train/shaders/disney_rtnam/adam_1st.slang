@@ -6,6 +6,7 @@ struct PushConstants
 {
     uint64_t seed;
     uint currentStep;
+    float learningRate;
 }
 
 [[push_constant]]
@@ -24,9 +25,9 @@ struct UniformBuffer
     uint4 decoderBiasOffsets2;
 
     uint batchSize;
-    float learningRate;
     uint encoderParamsSize;
     uint decoderParamsSize;
+    uint textureSize;
 }
 
 [[vk::binding(0)]]
@@ -78,7 +79,7 @@ void main(uint3 tid: SV_DispatchThreadID)
         {
             float weightbias = encoderNetworkParamsFloat[i];
 
-            optimizers::Adam optimizer = optimizers::Adam(encoderMoments1, encoderMoments2, uniforms.learningRate, LOSS_SCALE);
+            optimizers::Adam optimizer = optimizers::Adam(encoderMoments1, encoderMoments2, pc.learningRate, LOSS_SCALE);
 
             float adjustedWeightbias = optimizer.step(weightbias, i, encoderGradient, pc.currentStep + 1);
 
@@ -96,7 +97,7 @@ void main(uint3 tid: SV_DispatchThreadID)
         {
             float weightbias = decoderNetworkParamsFloat[i];
 
-            optimizers::Adam optimizer = optimizers::Adam(decoderMoments1, decoderMoments2, uniforms.learningRate, LOSS_SCALE);
+            optimizers::Adam optimizer = optimizers::Adam(decoderMoments1, decoderMoments2, pc.learningRate, LOSS_SCALE);
 
             float adjustedWeightbias = optimizer.step(weightbias, i, decoderGradient, pc.currentStep + 1);
 

@@ -71,12 +71,12 @@ Sampler2D roughnessMetallicSampler;
 [[vk::binding(8)]]
 Sampler2D normalSampler;
 
-
-
-struct Model {
+struct Model
+{
     __init(
         StructuredBuffer<half> decoderMatrixBuffer,
-        RWStructuredBuffer<half> decoderDerivativeBuffer) {
+        RWStructuredBuffer<half> decoderDerivativeBuffer)
+    {
         decoderParameters = MatrixBiasBuffer<half>(decoderMatrixBuffer);
         decoderDerivatives = MatrixBiasBufferDifferential<half>(decoderDerivativeBuffer);
     }
@@ -85,7 +85,8 @@ struct Model {
     private static func transformComponentFunc(
         normal: float3,
         tangent: float3,
-        no_diff v: float3) -> float3
+        no_diff v: float3)
+        ->float3
     {
         // normal = normalize(normal);
         // tangent = normalize(tangent - dot(tangent, normal) * normal);
@@ -98,7 +99,8 @@ struct Model {
     private static func transformFrameFunc(
         transformFrameInput: CoopVec<half, 12>,
         no_diff wi: float3,
-        no_diff wo: float3) -> CoopVec<half, 12>
+        no_diff wo: float3)
+        ->CoopVec<half, 12>
     {
         CoopVec<half, 12> result;
         for (var i = 0; i < 2; i++)
@@ -148,31 +150,25 @@ struct Model {
                 transformFrameInput.p[i * 6 + 0],
                 transformFrameInput.p[i * 6 + 1],
                 transformFrameInput.p[i * 6 + 2]);
-            var normalD = float3(
-                transformFrameInput.d[i * 6 + 0],
-                transformFrameInput.d[i * 6 + 1],
-                transformFrameInput.d[i * 6 + 2]);
+            var normalD = float3(0.0);
             var normal = diffPair(normalP, normalD);
 
             var tangentP = float3(
                 transformFrameInput.p[i * 6 + 3],
                 transformFrameInput.p[i * 6 + 4],
                 transformFrameInput.p[i * 6 + 5]);
-            var tangentD = float3(
-                transformFrameInput.d[i * 6 + 3],
-                transformFrameInput.d[i * 6 + 4],
-                transformFrameInput.d[i * 6 + 5]);
+            var tangentD = float3(0.0);
             var tangent = diffPair(tangentP, tangentD);
 
             bwd_diff(transformComponentFunc)(normal, tangent, wi, wiTBNGrad);
             bwd_diff(transformComponentFunc)(normal, tangent, wo, woTBNGrad);
 
-            transformFrameInputGrad[i * 6 + 0] += half(normal.d.x);
-            transformFrameInputGrad[i * 6 + 1] += half(normal.d.y);
-            transformFrameInputGrad[i * 6 + 2] += half(normal.d.z);
-            transformFrameInputGrad[i * 6 + 3] += half(tangent.d.x);
-            transformFrameInputGrad[i * 6 + 4] += half(tangent.d.y);
-            transformFrameInputGrad[i * 6 + 5] += half(tangent.d.z);
+            transformFrameInputGrad[i * 6 + 0] = half(normal.d.x);
+            transformFrameInputGrad[i * 6 + 1] = half(normal.d.y);
+            transformFrameInputGrad[i * 6 + 2] = half(normal.d.z);
+            transformFrameInputGrad[i * 6 + 3] = half(tangent.d.x);
+            transformFrameInputGrad[i * 6 + 4] = half(tangent.d.y);
+            transformFrameInputGrad[i * 6 + 5] = half(tangent.d.z);
         }
         transformFrameInput = diffPair(
             transformFrameInput.p,
@@ -181,7 +177,8 @@ struct Model {
 
     private static func combineLatentVectorAndTransformFrame(
         latentVector: CoopVec<half, 8>,
-        transformFrameOutput: CoopVec<half, 12>) -> CoopVec<half, 20>
+        transformFrameOutput: CoopVec<half, 12>)
+        ->CoopVec<half, 20>
     {
         CoopVec<half, 20> result;
         for (var i = 0; i < 8; i++)
@@ -201,19 +198,19 @@ struct Model {
         inout transformFrameOutput: DifferentialPair<CoopVec<half, 12>>,
         grad: CoopVec<half, 20>.Differential)
     {
-        var latentVectorGrad = latentVector.d;
+        CoopVec<half, 8> latentVectorGrad;
         for (var i = 0; i < 8; i++)
         {
-            latentVectorGrad[i] += grad[i];
+            latentVectorGrad[i] = grad[i];
         }
         latentVector = diffPair(
             latentVector.p,
             latentVectorGrad);
 
-        var transformFrameOutputGrad = transformFrameOutput.d;
+        CoopVec<half, 12> transformFrameOutputGrad;
         for (var i = 0; i < 12; i++)
         {
-            transformFrameOutputGrad[i] += grad[i + 8];
+            transformFrameOutputGrad[i] = grad[i + 8];
         }
         transformFrameOutput = diffPair(
             transformFrameOutput.p,
@@ -225,8 +222,8 @@ struct Model {
         latentVector: CoopVec<half, 8>,
         no_diff wi: float3,
         no_diff wo: float3,
-        decoderParams: MatrixBiasBuffer<half>,
-    )->CoopVec<half, 3>
+        decoderParams: MatrixBiasBuffer<half>, )
+        ->CoopVec<half, 3>
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
@@ -237,6 +234,9 @@ struct Model {
         using rtxns::mlp;
 
         CoopVec<half, 64> hidden;
+
+        // decoder
+        CoopVec<half, 3> output;
 
         // decoder transform frame
         CoopVec<half, 12> transformFrameInput;
@@ -253,9 +253,6 @@ struct Model {
             transformFrameInput,
             wi,
             wo);
-
-        // decoder
-        CoopVec<half, 3> output;
 
         // decoder input
         CoopVec<half, 20> decoderInputParams;
@@ -342,6 +339,61 @@ struct Model {
     MatrixBiasBufferDifferential<half> decoderDerivatives;
 }
 
+func localToTangent(v: float3)->float3x3
+{
+    let up = abs(v.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    let tangent = normalize(cross(up, v));
+    let bitangent = cross(v, tangent);
+    return float3x3(tangent, bitangent, v);
+}
+
+func sampleWiWo(
+    inout rng: PCG32,
+    out wi: float3,
+    out wo: float3)
+{
+    let thetaH = acos(sqrt(1.0 - rng.nextFloat()));
+    let phiH = 2.0 * PI * rng.nextFloat();
+    let H = float3(
+        sin(thetaH) * cos(phiH),
+        sin(thetaH) * sin(phiH),
+        cos(thetaH));
+
+    let thetaDelta = acos(sqrt(1.0 - rng.nextFloat()));
+    let phiDelta = 2.0 * PI * rng.nextFloat();
+    let delta = float3(
+        sin(thetaDelta) * cos(phiDelta),
+        sin(thetaDelta) * sin(phiDelta),
+        cos(thetaDelta));
+
+    let M = localToTangent(H);
+    let d = mul(M, delta);
+
+    wi = normalize(d);
+    wo = 2.0 * dot(wi, H) * H - wi;
+}
+
+func computeMipCount(width: int)->int
+{
+    return int(floor(log2(float(width)))) + 1;
+}
+
+func sampleMipLevel(u: float, mipCount: int)->float
+{
+    let bias = log(2.0);
+    let l_max = float(mipCount - 1);
+    let l = -log(1.0 - u) / bias;
+    return clamp(l, 0.0, l_max);
+}
+
+func srgbToLinear(color: float3)->float3
+{
+    let useLinear = color <= 0.04045;
+    let v1 = color / 12.92;
+    let v2 = pow((color + 0.055) / 1.055, 2.4);
+    return select(useLinear, v1, v2);
+}
+
 func createTbn(v: float3, normal: float3)
     ->float3x3
 {
@@ -359,17 +411,17 @@ func actualBrdfFunc(wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
     let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);
     let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
     let normal = normalSampler.SampleLevel(uv, mipLevel).xyz * 2 - 1;
-    let roughness = metallicRoughness.y;
-    let metallic = metallicRoughness.x;
+    let roughness = metallicRoughness.g;
+    let metallic = metallicRoughness.b;
 
     let TBN = createTbn(wo, normal);
 
     let wi_tangent = mul(TBN, wi);
     let wo_tangent = mul(TBN, wo);
-    return DisneyBRDF(wi_tangent, wo_tangent, baseColor.rgb, roughness, metallic);
+    return DisneyBRDF(wi_tangent, wo_tangent, srgbToLinear(baseColor.rgb), roughness, metallic);
 }
 
-func inputParametersIndex(uv: float2, mipLevel: float) -> uint
+func inputParametersIndex(uv: float2, mipLevel: float)->uint
 {
     // Select lower mip level
     let mipLevelFloor = floor(mipLevel);
@@ -388,22 +440,53 @@ func inputParametersIndex(uv: float2, mipLevel: float) -> uint
         currentMipLevel++;
     }
     let st = uint2(
-        uint(uv.x * currentMipSize + 0.5),
-        uint(uv.y * currentMipSize + 0.5));
+        uint(uv.x * currentMipSize),
+        uint(uv.y * currentMipSize));
     let latentTexturePixelIndex = currentPixelOffset + st.y * currentMipSize + st.x;
+
+    if (latentTexturePixelIndex >= uniforms.latentTexturePixelSize)
+    {
+        printf("latentTexturePixelIndex out of bounds: mip level %d, st.x %d, st.y %d\n", currentMipLevel, st.x, st.y);
+    }
 
     // Calculate index in latent texture parameters buffer
     return latentTexturePixelIndex * 8;
 }
 
-func LogL1LossDerivative(
-    actual: float3,
-    predicted: float3,
-    scale: float) -> float3
+[Differentiable]
+func log1p4(x: float)->float
 {
-    let signDiff = sign(actual - predicted);
+    var ret = x;
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    return ret;
+}
 
-    return scale * signDiff / (predicted + 0.01);
+[Differentiable]
+func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)->float
+{
+    var loss : float = 0.0;
+    for (var i = 0; i < 3; ++i)
+    {
+        let t = log1p4(target[i]);
+        let p = log1p4(predicted[i]);
+        loss += abs(t - p);
+    }
+    return loss * scale;
+}
+
+func LogL1LossDerivative(
+    target: float3,
+    predicted: float3,
+    scale: float,
+    loss: float)
+    ->float3
+{
+    var predictedD = diffPair(predicted, float3(0.0));
+    bwd_diff(LogL1Loss)(target, predictedD, scale, loss);
+    return predictedD.d;
 }
 
 [numthreads(64, 1, 1)]
@@ -417,13 +500,14 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     PCG32 rng = PCG32(pc.seed, i);
 
-    // calc wi and wo
-    float3 wi = normalize(float3(rng.nextFloat(), rng.nextFloat(), rng.nextFloat() * 2.0 - 1.0));
-    float3 wo = normalize(float3(rng.nextFloat(), rng.nextFloat(), rng.nextFloat() * 2.0 - 1.0));
+    // sample wi and wo
+    float3 wi;
+    float3 wo;
+    sampleWiWo(rng, wi, wo);
 
     // sample uv
     let uv = float2(rng.nextFloat(), rng.nextFloat());
-    let mipLevel = 0;
+    let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
 
     // calculate actual BRDF
     let actualBrdf = actualBrdfFunc(wi, wo, uv, mipLevel);
@@ -450,12 +534,13 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // calculate loss
     let scale = LOSS_SCALE / (uniforms.batchSize * 3);
-    let loss = LogL1LossDerivative(actualBrdf, predictedBrdf, scale);
+    let loss = LogL1Loss(actualBrdf, predictedBrdf, scale);
+    let lossD = LogL1LossDerivative(actualBrdf, predictedBrdf, scale, loss);
 
     // backward
     CoopVec<half, 8> inputDerivative;
     var inputParams = diffPair(input, inputDerivative);
-    model.backward(inputParams, wi, wo, HCoopVec<3>(loss[0], loss[1], loss[2]));
+    model.backward(inputParams, wi, wo, HCoopVec<3>(lossD[0], lossD[1], lossD[2]));
 
     // store gradients
     latentTextureGradients[i * 8 + 0] += float(inputParams.d[0]);
