@@ -429,7 +429,7 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
 {
     let mipLevelFloor = floor(mipLevel);
 
-    let iteration = 16;
+    let iteration = 64;
 
     var brdf = float3(0.0);
     for (var i = 0; i < iteration; ++i)
@@ -452,25 +452,6 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
 
     brdf /= float(iteration);
     return brdf;
-}
-
-func actualBrdfFuncPrev(wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
-{
-    // TODO filtering and mollification
-    let mipLevelFloor = floor(mipLevel);
-
-    let baseColor = baseColorSampler.SampleLevel(uv, mipLevelFloor);
-    let metallicRoughness =
-        roughnessMetallicSampler.SampleLevel(uv, mipLevelFloor);
-    let normal = normalSampler.SampleLevel(uv, mipLevelFloor).xyz * 2 - 1;
-    let roughness = metallicRoughness.g;
-    let metallic = metallicRoughness.b;
-
-    let TBN = createTbn(normal);
-
-    let wi_tangent = mul(TBN, wi);
-    let wo_tangent = mul(TBN, wo);
-    return DisneyBRDF(wi_tangent, wo_tangent, srgbToLinear(baseColor.rgb), roughness, metallic);
 }
 
 func inputParametersIndex(uv: float2, mipLevel: float)->uint
@@ -562,8 +543,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
 
     // calculate actual BRDF
-    // let actualBrdf = actualBrdfFunc(rng, wi, wo, uv, mipLevel);
-    let actualBrdf = actualBrdfFuncPrev(wi, wo, uv, mipLevel);
+    let actualBrdf = actualBrdfFunc(rng, wi, wo, uv, mipLevel);
 
     // calculate model BRDF
     let parameterIndex = inputParametersIndex(uv, mipLevel);
