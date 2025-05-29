@@ -134,7 +134,7 @@ struct Model
         no_diff wo: float3,
         grad: CoopVec<half, 12>.Differential)
     {
-        CoopVec<half, 12> transformFrameInputGrad = transformFrameInput.d;
+        CoopVec<half, 12> transformFrameInputGrad;
         for (var i = 0; i < 2; i++)
         {
             var wiTBNGrad = float3(
@@ -169,12 +169,12 @@ struct Model
             bwd_diff(transformComponentFunc)(normal, tangent, wi, wiTBNGrad);
             bwd_diff(transformComponentFunc)(normal, tangent, wo, woTBNGrad);
 
-            transformFrameInputGrad[i * 6 + 0] += half(normal.d.x);
-            transformFrameInputGrad[i * 6 + 1] += half(normal.d.y);
-            transformFrameInputGrad[i * 6 + 2] += half(normal.d.z);
-            transformFrameInputGrad[i * 6 + 3] += half(tangent.d.x);
-            transformFrameInputGrad[i * 6 + 4] += half(tangent.d.y);
-            transformFrameInputGrad[i * 6 + 5] += half(tangent.d.z);
+            transformFrameInputGrad[i * 6 + 0] = half(normal.d.x);
+            transformFrameInputGrad[i * 6 + 1] = half(normal.d.y);
+            transformFrameInputGrad[i * 6 + 2] = half(normal.d.z);
+            transformFrameInputGrad[i * 6 + 3] = half(tangent.d.x);
+            transformFrameInputGrad[i * 6 + 4] = half(tangent.d.y);
+            transformFrameInputGrad[i * 6 + 5] = half(tangent.d.z);
         }
         transformFrameInput = diffPair(
             transformFrameInput.p,
@@ -213,10 +213,10 @@ struct Model
             latentVector.p,
             latentVectorGrad);
 
-        CoopVec<half, 12> transformFrameOutputGrad = transformFrameOutput.d;
+        CoopVec<half, 12> transformFrameOutputGrad;
         for (var i = 0; i < 12; i++)
         {
-            transformFrameOutputGrad[i] += grad[i + 8];
+            transformFrameOutputGrad[i] = grad[i + 8];
         }
         transformFrameOutput = diffPair(
             transformFrameOutput.p,
