@@ -35,6 +35,8 @@ struct FirstPhaseUniformBuffer {
     encoder_params_size: u32,
     decoder_params_size: u32,
     texture_size: u32,
+    mollification_step: u32,
+    _padding: [u32; 3],
 }
 
 #[repr(C)]
@@ -86,6 +88,7 @@ pub fn train(
     let batch_count = 100;
     let learning_rate_start = 1e-3;
     let learning_rate_end = 1e-4;
+    let mollification_step = epochs * batch_count / 15;
 
     // ===========================
     // Prepare training
@@ -1819,6 +1822,8 @@ pub fn train(
         encoder_params_size: encoder_total_params_count as u32,
         decoder_params_size: decoder_total_params_count as u32,
         texture_size: texture_size as u32,
+        mollification_step,
+        _padding: [0; 3],
     };
     first_phase_uniform_buffer_allocation
         .mapped_slice_mut()

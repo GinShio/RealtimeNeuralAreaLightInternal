@@ -1,6 +1,6 @@
 import "../rtxns/Optimizers";
 
-#define LOSS_SCALE 128.0
+#define LOSS_SCALE 10000.0
 
 struct PushConstants
 {
@@ -93,11 +93,6 @@ void main(uint3 tid: SV_DispatchThreadID)
             decoderNetworkParamsFloat[i] = adjustedWeightbias;
             decoderNetworkParams[i] = (half)adjustedWeightbias;
         }
-
-        // if (i == uniforms.decoderBiasOffsets1[0])
-        // {
-        //     printf("Decoder bias: %f\n", decoderNetworkParams[i / 2]);
-        // }
     }
     else
     {

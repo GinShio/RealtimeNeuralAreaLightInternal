@@ -1,6 +1,6 @@
 import "../rtxns/Optimizers";
 
-#define LOSS_SCALE 128.0
+#define LOSS_SCALE 10000.0
 
 struct PushConstants
 {
@@ -28,6 +28,7 @@ struct UniformBuffer
     uint encoderParamsSize;
     uint decoderParamsSize;
     uint textureSize;
+    uint mollificationStep;
 }
 
 [[vk::binding(0)]]

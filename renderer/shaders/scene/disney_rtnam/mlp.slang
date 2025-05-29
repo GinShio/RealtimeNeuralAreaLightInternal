@@ -274,6 +274,7 @@ struct Model
                 uniforms.biasOffsets0[3]),
             matrixLayout,
             componentType);
+        hidden = act.eval(hidden);
 
         // decoder 4th layer
         output = LinearOp<half, 3, 64>(

@@ -24,6 +24,7 @@ struct UniformBuffer
     uint encoderParamsSize;
     uint decoderParamsSize;
     uint textureSize;
+    uint mollificationStep;
 }
 
 [[vk::binding(0)]]

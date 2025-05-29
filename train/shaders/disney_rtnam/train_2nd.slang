@@ -10,7 +10,7 @@ import "../rtxns/Utils";
 
 import "disney";
 
-#define LOSS_SCALE 128.0
+#define LOSS_SCALE 10000.0
 
 using namespace rtxns;
 using namespace rtxns::mlp;
@@ -134,7 +134,7 @@ struct Model
         no_diff wo: float3,
         grad: CoopVec<half, 12>.Differential)
     {
-        CoopVec<half, 12> transformFrameInputGrad;
+        CoopVec<half, 12> transformFrameInputGrad = transformFrameInput.d;
         for (var i = 0; i < 2; i++)
         {
             var wiTBNGrad = float3(
@@ -150,25 +150,31 @@ struct Model
                 transformFrameInput.p[i * 6 + 0],
                 transformFrameInput.p[i * 6 + 1],
                 transformFrameInput.p[i * 6 + 2]);
-            var normalD = float3(0.0);
+            var normalD = float3(
+                transformFrameInput.d[i * 6 + 0],
+                transformFrameInput.d[i * 6 + 1],
+                transformFrameInput.d[i * 6 + 2]);
             var normal = diffPair(normalP, normalD);
 
             var tangentP = float3(
                 transformFrameInput.p[i * 6 + 3],
                 transformFrameInput.p[i * 6 + 4],
                 transformFrameInput.p[i * 6 + 5]);
-            var tangentD = float3(0.0);
+            var tangentD = float3(
+                transformFrameInput.d[i * 6 + 3],
+                transformFrameInput.d[i * 6 + 4],
+                transformFrameInput.d[i * 6 + 5]);
             var tangent = diffPair(tangentP, tangentD);
 
             bwd_diff(transformComponentFunc)(normal, tangent, wi, wiTBNGrad);
             bwd_diff(transformComponentFunc)(normal, tangent, wo, woTBNGrad);
 
-            transformFrameInputGrad[i * 6 + 0] = half(normal.d.x);
-            transformFrameInputGrad[i * 6 + 1] = half(normal.d.y);
-            transformFrameInputGrad[i * 6 + 2] = half(normal.d.z);
-            transformFrameInputGrad[i * 6 + 3] = half(tangent.d.x);
-            transformFrameInputGrad[i * 6 + 4] = half(tangent.d.y);
-            transformFrameInputGrad[i * 6 + 5] = half(tangent.d.z);
+            transformFrameInputGrad[i * 6 + 0] += half(normal.d.x);
+            transformFrameInputGrad[i * 6 + 1] += half(normal.d.y);
+            transformFrameInputGrad[i * 6 + 2] += half(normal.d.z);
+            transformFrameInputGrad[i * 6 + 3] += half(tangent.d.x);
+            transformFrameInputGrad[i * 6 + 4] += half(tangent.d.y);
+            transformFrameInputGrad[i * 6 + 5] += half(tangent.d.z);
         }
         transformFrameInput = diffPair(
             transformFrameInput.p,
@@ -198,19 +204,19 @@ struct Model
         inout transformFrameOutput: DifferentialPair<CoopVec<half, 12>>,
         grad: CoopVec<half, 20>.Differential)
     {
-        CoopVec<half, 8> latentVectorGrad;
+        CoopVec<half, 8> latentVectorGrad = latentVector.d;
         for (var i = 0; i < 8; i++)
         {
-            latentVectorGrad[i] = grad[i];
+            latentVectorGrad[i] += grad[i];
         }
         latentVector = diffPair(
             latentVector.p,
             latentVectorGrad);
 
-        CoopVec<half, 12> transformFrameOutputGrad;
+        CoopVec<half, 12> transformFrameOutputGrad = transformFrameOutput.d;
         for (var i = 0; i < 12; i++)
         {
-            transformFrameOutputGrad[i] = grad[i + 8];
+            transformFrameOutputGrad[i] += grad[i + 8];
         }
         transformFrameOutput = diffPair(
             transformFrameOutput.p,
@@ -291,6 +297,7 @@ struct Model
                 uniforms.decoderBiasOffsets1[3]),
             matrixLayout,
             componentType);
+        hidden = act.eval(hidden);
 
         // decoder 4th layer
         output = LinearOp<half, 3, 64>(
@@ -394,7 +401,7 @@ func srgbToLinear(color: float3)->float3
     return select(useLinear, v1, v2);
 }
 
-func createTbn(v: float3, normal: float3)
+func createTbn(normal: float3)
     ->float3x3
 {
     var T = float3(1, 0, 0);
@@ -404,17 +411,62 @@ func createTbn(v: float3, normal: float3)
     return float3x3(T, B, N);
 }
 
-func actualBrdfFunc(wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
+func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
+{
+    let levelWidth = uniforms.textureSize / exp2(mipLevel);
+    let pixelSize = 1.0 / levelWidth;
+    let sigma = 0.5 * pixelSize;
+
+    // Box-Muller method for generating Gaussian noise
+    let r = sqrt(-2.0 * log(max(rng.nextFloat(), 1e-6)));
+    let theta = 2.0 * PI * rng.nextFloat();
+    let offset = sigma * r * float2(cos(theta), sin(theta));
+
+    return uv + offset;
+}
+
+func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
+{
+    let mipLevelFloor = floor(mipLevel);
+
+    let iteration = 16;
+
+    var brdf = float3(0.0);
+    for (var i = 0; i < iteration; ++i)
+    {
+        let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
+
+        let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
+        let metallicRoughness =
+            roughnessMetallicSampler.SampleLevel(uv_modify, mipLevelFloor);
+        let normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz * 2 - 1;
+        let roughness = metallicRoughness.g;
+        let metallic = metallicRoughness.b;
+
+        let TBN = createTbn(normal);
+
+        let wi_tangent = mul(TBN, wi);
+        let wo_tangent = mul(TBN, wo);
+        brdf += DisneyBRDF(wi_tangent, wo_tangent, srgbToLinear(baseColor.rgb), roughness, metallic);
+    }
+
+    brdf /= float(iteration);
+    return brdf;
+}
+
+func actualBrdfFuncPrev(wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
 {
     // TODO filtering and mollification
+    let mipLevelFloor = floor(mipLevel);
 
-    let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);
-    let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
-    let normal = normalSampler.SampleLevel(uv, mipLevel).xyz * 2 - 1;
+    let baseColor = baseColorSampler.SampleLevel(uv, mipLevelFloor);
+    let metallicRoughness =
+        roughnessMetallicSampler.SampleLevel(uv, mipLevelFloor);
+    let normal = normalSampler.SampleLevel(uv, mipLevelFloor).xyz * 2 - 1;
     let roughness = metallicRoughness.g;
     let metallic = metallicRoughness.b;
 
-    let TBN = createTbn(wo, normal);
+    let TBN = createTbn(normal);
 
     let wi_tangent = mul(TBN, wi);
     let wo_tangent = mul(TBN, wo);
@@ -510,7 +562,8 @@ void main(uint3 tid: SV_DispatchThreadID)
     let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
 
     // calculate actual BRDF
-    let actualBrdf = actualBrdfFunc(wi, wo, uv, mipLevel);
+    // let actualBrdf = actualBrdfFunc(rng, wi, wo, uv, mipLevel);
+    let actualBrdf = actualBrdfFuncPrev(wi, wo, uv, mipLevel);
 
     // calculate model BRDF
     let parameterIndex = inputParametersIndex(uv, mipLevel);
