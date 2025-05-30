@@ -229,16 +229,9 @@ pub fn train(
     let (latent_texture_gradient_buffer, latent_texture_gradient_buffer_allocation) =
         create_storage_buffer(
             state,
-            batch_size as u64 * 8 * std::mem::size_of::<f32>() as u64,
+            latent_texture_total_pixel_count * 8 * std::mem::size_of::<f32>() as u64,
         )?;
-    let (latent_texture_gradient_index_buffer, latent_texture_gradient_index_buffer_allocation) =
-        create_storage_buffer(state, batch_size as u64 * std::mem::size_of::<u32>() as u64)?;
     let (latent_texture_step_count_buffer, latent_texture_step_count_buffer_allocation) =
-        create_storage_buffer(
-            state,
-            latent_texture_total_pixel_count * 8 * std::mem::size_of::<u32>() as u64,
-        )?;
-    let (latent_texture_lock_buffer, latent_texture_lock_buffer_allocation) =
         create_storage_buffer(
             state,
             latent_texture_total_pixel_count * 8 * std::mem::size_of::<u32>() as u64,
@@ -974,81 +967,75 @@ pub fn train(
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture gradient index buffer
+            // latent texture step count buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture step count buffer
+            // latent texture moment 1 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture moment 1 buffer
+            // latent texture moment 2 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(5)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture moment 2 buffer
+            // decoder network params
             vk::DescriptorSetLayoutBinding::default()
                 .binding(6)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder network params
+            // decoder network params float
             vk::DescriptorSetLayoutBinding::default()
                 .binding(7)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder network params float
+            // decoder gradient buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(8)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder gradient buffer
+            // decoder moment 1 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(9)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder moment 1 buffer
+            // decoder moment 2 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(10)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder moment 2 buffer
+            // encoder network params float
             vk::DescriptorSetLayoutBinding::default()
                 .binding(11)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // encoder network params float
-            vk::DescriptorSetLayoutBinding::default()
-                .binding(12)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // base color texture
             vk::DescriptorSetLayoutBinding::default()
-                .binding(13)
+                .binding(12)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // roughness metallic texture
             vk::DescriptorSetLayoutBinding::default()
-                .binding(14)
+                .binding(13)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // normal texture
             vk::DescriptorSetLayoutBinding::default()
-                .binding(15)
+                .binding(14)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
@@ -1069,7 +1056,7 @@ pub fn train(
                 .descriptor_count(1),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(12),
+                .descriptor_count(11),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(3),
@@ -1112,10 +1099,6 @@ pub fn train(
             .buffer(latent_texture_gradient_buffer)
             .offset(0)
             .range(batch_size as u64 * 8 * std::mem::size_of::<f32>() as u64)];
-        let latent_texture_gradient_index_buffer_info = [vk::DescriptorBufferInfo::default()
-            .buffer(latent_texture_gradient_index_buffer)
-            .offset(0)
-            .range(batch_size as u64 * std::mem::size_of::<u32>() as u64)];
         let latent_texture_step_count_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_step_count_buffer)
             .offset(0)
@@ -1187,82 +1170,76 @@ pub fn train(
                 .dst_binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_gradient_buffer_info),
-            // latent texture gradient index buffer
-            vk::WriteDescriptorSet::default()
-                .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(3)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_gradient_index_buffer_info),
             // latent texture step count buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(4)
+                .dst_binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_step_count_buffer_info),
             // latent texture moment 1 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(5)
+                .dst_binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_moment_1_buffer_info),
             // latent texture moment 2 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(6)
+                .dst_binding(5)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_moment_2_buffer_info),
             // decoder network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(7)
+                .dst_binding(6)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_buffer_info),
             // decoder network params float
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(8)
+                .dst_binding(7)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_float_buffer_info),
             // decoder gradient buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(9)
+                .dst_binding(8)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_gradient_buffer_info),
             // decoder moment 1 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(10)
+                .dst_binding(9)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_moment_1_buffer_info),
             // decoder moment 2 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(11)
+                .dst_binding(10)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_moment_2_buffer_info),
             // encoder network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(12)
+                .dst_binding(11)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&encoder_network_params_buffer_info),
             // base color texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(13)
+                .dst_binding(12)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&base_color_texture_info),
             // roughness metallic texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(14)
+                .dst_binding(13)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&roughness_metallic_texture_info),
             // normal texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_init_descriptor_set)
-                .dst_binding(15)
+                .dst_binding(14)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&normal_texture_info),
         ];
@@ -1290,39 +1267,33 @@ pub fn train(
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent_texture_gradient_index buffer
+            // decoder_network params
             vk::DescriptorSetLayoutBinding::default()
                 .binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder_network params
+            // decoder_gradient buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder_gradient buffer
-            vk::DescriptorSetLayoutBinding::default()
-                .binding(5)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // base color texture
             vk::DescriptorSetLayoutBinding::default()
-                .binding(6)
+                .binding(5)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // roughness metallic texture
             vk::DescriptorSetLayoutBinding::default()
-                .binding(7)
+                .binding(6)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // normal texture
             vk::DescriptorSetLayoutBinding::default()
-                .binding(8)
+                .binding(7)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
@@ -1343,7 +1314,7 @@ pub fn train(
                 .descriptor_count(1),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(5),
+                .descriptor_count(4),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(3),
@@ -1385,11 +1356,7 @@ pub fn train(
         let latent_texture_gradient_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_gradient_buffer)
             .offset(0)
-            .range(batch_size as u64 * 8 * std::mem::size_of::<f32>() as u64)];
-        let latent_texture_gradient_index_buffer_info = [vk::DescriptorBufferInfo::default()
-            .buffer(latent_texture_gradient_index_buffer)
-            .offset(0)
-            .range(batch_size as u64 * std::mem::size_of::<u32>() as u64)];
+            .range(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)];
 
         let decoder_network_params_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(decoder_network_params_buffer)
@@ -1432,40 +1399,34 @@ pub fn train(
                 .dst_binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_gradient_buffer_info),
-            // latent texture gradient index buffer
-            vk::WriteDescriptorSet::default()
-                .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(3)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_gradient_index_buffer_info),
             // decoder network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(4)
+                .dst_binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_buffer_info),
             // decoder gradient buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(5)
+                .dst_binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_gradient_buffer_info),
             // base color texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(6)
+                .dst_binding(5)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&base_color_texture_info),
             // roughness metallic texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(7)
+                .dst_binding(6)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&roughness_metallic_texture_info),
             // normal texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_train_descriptor_set)
-                .dst_binding(8)
+                .dst_binding(7)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&normal_texture_info),
         ];
@@ -1493,63 +1454,51 @@ pub fn train(
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture gradient index buffer
+            // latent texture step count buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture step count buffer
+            // latent texture moment 1 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture lock buffer
+            // latent texture moment 2 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(5)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture moment 1 buffer
+            // decoder network params
             vk::DescriptorSetLayoutBinding::default()
                 .binding(6)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // latent texture moment 2 buffer
+            // decoder network params float
             vk::DescriptorSetLayoutBinding::default()
                 .binding(7)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder network params
+            // decoder gradient buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(8)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder network params float
+            // decoder moment 1 buffer
             vk::DescriptorSetLayoutBinding::default()
                 .binding(9)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder gradient buffer
-            vk::DescriptorSetLayoutBinding::default()
-                .binding(10)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // decoder moment 1 buffer
-            vk::DescriptorSetLayoutBinding::default()
-                .binding(11)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // decoder moment 2 buffer
             vk::DescriptorSetLayoutBinding::default()
-                .binding(12)
+                .binding(10)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
@@ -1609,17 +1558,9 @@ pub fn train(
         let latent_texture_gradient_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_gradient_buffer)
             .offset(0)
-            .range(batch_size as u64 * 8 * std::mem::size_of::<f32>() as u64)];
-        let latent_texture_gradient_index_buffer_info = [vk::DescriptorBufferInfo::default()
-            .buffer(latent_texture_gradient_index_buffer)
-            .offset(0)
-            .range(batch_size as u64 * std::mem::size_of::<u32>() as u64)];
+            .range(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)];
         let latent_texture_step_count_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(latent_texture_step_count_buffer)
-            .offset(0)
-            .range(latent_texture_total_params_count * std::mem::size_of::<u32>() as u64)];
-        let latent_texture_lock_buffer = [vk::DescriptorBufferInfo::default()
-            .buffer(latent_texture_lock_buffer)
             .offset(0)
             .range(latent_texture_total_params_count * std::mem::size_of::<u32>() as u64)];
         let latent_texture_moment_1_buffer_info = [vk::DescriptorBufferInfo::default()
@@ -1671,64 +1612,52 @@ pub fn train(
                 .dst_binding(2)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_gradient_buffer_info),
-            // latent texture gradient index buffer
+            // latent texture step count buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
                 .dst_binding(3)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_gradient_index_buffer_info),
-            // latent texture step count buffer
-            vk::WriteDescriptorSet::default()
-                .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(4)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_step_count_buffer_info),
-            // latent texture lock buffer
-            vk::WriteDescriptorSet::default()
-                .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(5)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&latent_texture_lock_buffer),
             // latent texture moment 1 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(6)
+                .dst_binding(4)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_moment_1_buffer_info),
             // latent texture moment 2 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(7)
+                .dst_binding(5)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&latent_texture_moment_2_buffer_info),
             // decoder network params
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(8)
+                .dst_binding(6)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_buffer_info),
             // decoder network params float
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(9)
+                .dst_binding(7)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_network_params_float_buffer_info),
             // decoder gradient buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(10)
+                .dst_binding(8)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_gradient_buffer_info),
             // decoder moment 1 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(11)
+                .dst_binding(9)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_moment_1_buffer_info),
             // decoder moment 2 buffer
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_optimization_descriptor_set)
-                .dst_binding(12)
+                .dst_binding(10)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&decoder_moment_2_buffer_info),
         ];
@@ -1927,7 +1856,7 @@ pub fn train(
                 );
                 state
                     .device
-                    .cmd_dispatch(command_buffer, batch_size.div_ceil(32), 1, 1);
+                    .cmd_dispatch(command_buffer, batch_size.div_ceil(64), 1, 1);
             }
             let buffer_memory_barriers = [
                 vk::BufferMemoryBarrier2::default()
@@ -2153,248 +2082,253 @@ pub fn train(
             .allocate_command_buffers(&command_buffer_allocate_info)?
     }[0];
 
-    // // training loop
-    // let mut rng = rand::rng();
-    // for i in 0..epochs {
-    //     print!("\r  Second Phase Epoch {}/{}", i + 1, epochs);
-    //     std::io::stdout().flush().expect("Failed to flush stdout");
+    // training loop
+    let mut rng = rand::rng();
+    let epochs = (epochs / 5).max(1);
+    for i in 0..epochs {
+        print!("\r  Second Phase Epoch {}/{}", i + 1, epochs);
+        std::io::stdout().flush().expect("Failed to flush stdout");
 
-    //     // begin command buffer
-    //     unsafe {
-    //         state
-    //             .device
-    //             .begin_command_buffer(command_buffer, &vk::CommandBufferBeginInfo::default())?;
-    //     }
+        // begin command buffer
+        unsafe {
+            state
+                .device
+                .begin_command_buffer(command_buffer, &vk::CommandBufferBeginInfo::default())?;
+        }
 
-    //     for j in 0..batch_count {
-    //         let seed = rng.random();
+        for j in 0..batch_count {
+            let seed = rng.random();
 
-    //         // training pass
-    //         unsafe {
-    //             state.device.cmd_bind_pipeline(
-    //                 command_buffer,
-    //                 vk::PipelineBindPoint::COMPUTE,
-    //                 second_phase_train_pipeline,
-    //             );
-    //             state.device.cmd_bind_descriptor_sets(
-    //                 command_buffer,
-    //                 vk::PipelineBindPoint::COMPUTE,
-    //                 second_phase_train_pipeline_layout,
-    //                 0,
-    //                 &[second_phase_train_descriptor_set],
-    //                 &[],
-    //             );
-    //             state.device.cmd_push_constants(
-    //                 command_buffer,
-    //                 second_phase_train_pipeline_layout,
-    //                 vk::ShaderStageFlags::COMPUTE,
-    //                 0,
-    //                 bytemuck::bytes_of(&SecondPhasePushConstants {
-    //                     seed,
-    //                     current_step: i * batch_count + j,
-    //                     _padding: 0,
-    //                 }),
-    //             );
-    //             state
-    //                 .device
-    //                 .cmd_dispatch(command_buffer, batch_size.div_ceil(32), 1, 1);
-    //         }
-    //         let buffer_memory_barriers = [
-    //             vk::BufferMemoryBarrier2::default()
-    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-    //                 .buffer(latent_texture_gradient_buffer)
-    //                 .offset(0)
-    //                 .size(vk::WHOLE_SIZE),
-    //             vk::BufferMemoryBarrier2::default()
-    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-    //                 .buffer(decoder_gradient_buffer)
-    //                 .offset(0)
-    //                 .size(vk::WHOLE_SIZE),
-    //         ];
-    //         let dependency_info =
-    //             vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
-    //         unsafe {
-    //             state
-    //                 .device
-    //                 .cmd_pipeline_barrier2(command_buffer, &dependency_info);
-    //         }
+            // training pass
+            unsafe {
+                state.device.cmd_bind_pipeline(
+                    command_buffer,
+                    vk::PipelineBindPoint::COMPUTE,
+                    second_phase_train_pipeline,
+                );
+                state.device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::COMPUTE,
+                    second_phase_train_pipeline_layout,
+                    0,
+                    &[second_phase_train_descriptor_set],
+                    &[],
+                );
+                state.device.cmd_push_constants(
+                    command_buffer,
+                    second_phase_train_pipeline_layout,
+                    vk::ShaderStageFlags::COMPUTE,
+                    0,
+                    bytemuck::bytes_of(&SecondPhasePushConstants {
+                        seed,
+                        current_step: i * batch_count + j,
+                        _padding: 0,
+                    }),
+                );
+                state.device.cmd_dispatch(
+                    command_buffer,
+                    latent_texture_total_pixel_count.div_ceil(64) as u32,
+                    1,
+                    1,
+                );
+            }
+            let buffer_memory_barriers = [
+                vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+                    .buffer(latent_texture_gradient_buffer)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE),
+                vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+                    .buffer(decoder_gradient_buffer)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE),
+            ];
+            let dependency_info =
+                vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
+            unsafe {
+                state
+                    .device
+                    .cmd_pipeline_barrier2(command_buffer, &dependency_info);
+            }
 
-    //         // optimization pass
-    //         unsafe {
-    //             state.device.cmd_bind_pipeline(
-    //                 command_buffer,
-    //                 vk::PipelineBindPoint::COMPUTE,
-    //                 second_phase_optimize_pipeline,
-    //             );
-    //             state.device.cmd_bind_descriptor_sets(
-    //                 command_buffer,
-    //                 vk::PipelineBindPoint::COMPUTE,
-    //                 second_phase_optimize_pipeline_layout,
-    //                 0,
-    //                 &[second_phase_optimization_descriptor_set],
-    //                 &[],
-    //             );
-    //             state.device.cmd_push_constants(
-    //                 command_buffer,
-    //                 second_phase_optimize_pipeline_layout,
-    //                 vk::ShaderStageFlags::COMPUTE,
-    //                 0,
-    //                 bytemuck::bytes_of(&SecondPhasePushConstants {
-    //                     seed,
-    //                     current_step: i * batch_count + j,
-    //                     _padding: 0,
-    //                 }),
-    //             );
-    //             state.device.cmd_dispatch(
-    //                 command_buffer,
-    //                 (decoder_total_params_count as u32 + batch_size).div_ceil(32),
-    //                 1,
-    //                 1,
-    //             );
-    //         }
-    //         let buffer_memory_barriers = [
-    //             vk::BufferMemoryBarrier2::default()
-    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-    //                 .buffer(latent_texture_params_buffer)
-    //                 .offset(0)
-    //                 .size(vk::WHOLE_SIZE),
-    //             vk::BufferMemoryBarrier2::default()
-    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-    //                 .buffer(latent_texture_gradient_buffer)
-    //                 .offset(0)
-    //                 .size(vk::WHOLE_SIZE),
-    //             vk::BufferMemoryBarrier2::default()
-    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-    //                 .buffer(decoder_network_params_buffer)
-    //                 .offset(0)
-    //                 .size(vk::WHOLE_SIZE),
-    //             vk::BufferMemoryBarrier2::default()
-    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-    //                 .buffer(decoder_gradient_buffer)
-    //                 .offset(0)
-    //                 .size(vk::WHOLE_SIZE),
-    //         ];
-    //         let dependency_info =
-    //             vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
-    //         unsafe {
-    //             state
-    //                 .device
-    //                 .cmd_pipeline_barrier2(command_buffer, &dependency_info);
-    //         }
-    //     }
+            // optimization pass
+            unsafe {
+                state.device.cmd_bind_pipeline(
+                    command_buffer,
+                    vk::PipelineBindPoint::COMPUTE,
+                    second_phase_optimize_pipeline,
+                );
+                state.device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::COMPUTE,
+                    second_phase_optimize_pipeline_layout,
+                    0,
+                    &[second_phase_optimization_descriptor_set],
+                    &[],
+                );
+                state.device.cmd_push_constants(
+                    command_buffer,
+                    second_phase_optimize_pipeline_layout,
+                    vk::ShaderStageFlags::COMPUTE,
+                    0,
+                    bytemuck::bytes_of(&SecondPhasePushConstants {
+                        seed,
+                        current_step: i * batch_count + j,
+                        _padding: 0,
+                    }),
+                );
+                state.device.cmd_dispatch(
+                    command_buffer,
+                    (decoder_total_params_count + latent_texture_total_params_count).div_ceil(32)
+                        as u32,
+                    1,
+                    1,
+                );
+            }
+            let buffer_memory_barriers = [
+                vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+                    .buffer(latent_texture_params_buffer)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE),
+                vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+                    .buffer(latent_texture_gradient_buffer)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE),
+                vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+                    .buffer(decoder_network_params_buffer)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE),
+                vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+                    .buffer(decoder_gradient_buffer)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE),
+            ];
+            let dependency_info =
+                vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
+            unsafe {
+                state
+                    .device
+                    .cmd_pipeline_barrier2(command_buffer, &dependency_info);
+            }
+        }
 
-    //     if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
-    //         // Barrier to ensure all writes are visible before copying
-    //         let buffer_memory_barriers = [
-    //             vk::BufferMemoryBarrier2::default()
-    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .dst_stage_mask(vk::PipelineStageFlags2::COPY)
-    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-    //                 .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
-    //                 .buffer(latent_texture_params_buffer)
-    //                 .offset(0)
-    //                 .size(vk::WHOLE_SIZE),
-    //             vk::BufferMemoryBarrier2::default()
-    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-    //                 .dst_stage_mask(vk::PipelineStageFlags2::COPY)
-    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-    //                 .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
-    //                 .buffer(decoder_network_params_buffer)
-    //                 .offset(0)
-    //                 .size(vk::WHOLE_SIZE),
-    //         ];
-    //         let dependency_info =
-    //             vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
-    //         unsafe {
-    //             state
-    //                 .device
-    //                 .cmd_pipeline_barrier2(command_buffer, &dependency_info);
-    //         }
+        if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
+            // Barrier to ensure all writes are visible before copying
+            let buffer_memory_barriers = [
+                vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COPY)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
+                    .buffer(latent_texture_params_buffer)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE),
+                vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COPY)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
+                    .buffer(decoder_network_params_buffer)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE),
+            ];
+            let dependency_info =
+                vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
+            unsafe {
+                state
+                    .device
+                    .cmd_pipeline_barrier2(command_buffer, &dependency_info);
+            }
 
-    //         // copy params to CPU buffer
-    //         unsafe {
-    //             state.device.cmd_copy_buffer(
-    //                 command_buffer,
-    //                 latent_texture_params_buffer,
-    //                 latent_texture_params_cpu_buffer,
-    //                 &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
-    //                     latent_texture_total_params_count * std::mem::size_of::<f32>() as u64,
-    //                 )],
-    //             );
-    //             state.device.cmd_copy_buffer(
-    //                 command_buffer,
-    //                 decoder_network_params_buffer,
-    //                 decoder_network_params_cpu_buffer,
-    //                 &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
-    //                     decoder_total_params_count * std::mem::size_of::<half::f16>() as u64,
-    //                 )],
-    //             );
-    //         }
-    //     }
+            // copy params to CPU buffer
+            unsafe {
+                state.device.cmd_copy_buffer(
+                    command_buffer,
+                    latent_texture_params_buffer,
+                    latent_texture_params_cpu_buffer,
+                    &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
+                        latent_texture_total_params_count * std::mem::size_of::<f32>() as u64,
+                    )],
+                );
+                state.device.cmd_copy_buffer(
+                    command_buffer,
+                    decoder_network_params_buffer,
+                    decoder_network_params_cpu_buffer,
+                    &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
+                        decoder_total_params_count * std::mem::size_of::<half::f16>() as u64,
+                    )],
+                );
+            }
+        }
 
-    //     // end command buffer
-    //     unsafe {
-    //         state.device.end_command_buffer(command_buffer)?;
-    //     }
+        // end command buffer
+        unsafe {
+            state.device.end_command_buffer(command_buffer)?;
+        }
 
-    //     // submit command buffer
-    //     let command_buffers = [command_buffer];
-    //     let submit_info = vk::SubmitInfo::default().command_buffers(&command_buffers);
-    //     unsafe {
-    //         state
-    //             .device
-    //             .queue_submit(state.queue, &[submit_info], vk::Fence::null())?;
-    //         state.device.queue_wait_idle(state.queue)?;
-    //     }
-    //     // reset command buffer
-    //     unsafe {
-    //         state
-    //             .device
-    //             .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())?;
-    //     }
+        // submit command buffer
+        let command_buffers = [command_buffer];
+        let submit_info = vk::SubmitInfo::default().command_buffers(&command_buffers);
+        unsafe {
+            state
+                .device
+                .queue_submit(state.queue, &[submit_info], vk::Fence::null())?;
+            state.device.queue_wait_idle(state.queue)?;
+        }
+        // reset command buffer
+        unsafe {
+            state
+                .device
+                .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())?;
+        }
 
-    //     // Save parameters
-    //     if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
-    //         let latent_texture_data = latent_texture_params_cpu_buffer_allocation
-    //             .mapped_slice()
-    //             .expect("Failed to allocate CPU buffer for latent texture params");
-    //         save_mip_image(latent_texture_data, texture_size, "./network/disney-rtnam/")?;
+        // Save parameters
+        if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
+            let latent_texture_data = latent_texture_params_cpu_buffer_allocation
+                .mapped_slice()
+                .expect("Failed to allocate CPU buffer for latent texture params");
+            save_mip_image(latent_texture_data, texture_size, "./network/disney-rtnam/")?;
 
-    //         let decoder_data = decoder_network_params_cpu_buffer_allocation
-    //             .mapped_slice()
-    //             .expect("Failed to map network params CPU buffer")
-    //             .to_vec();
+            let decoder_data = decoder_network_params_cpu_buffer_allocation
+                .mapped_slice()
+                .expect("Failed to map network params CPU buffer")
+                .to_vec();
 
-    //         let decoder_trained_network = TrainedNetwork::from_data(
-    //             &state.cooperative_vector_fn,
-    //             &decoder_data,
-    //             &decoder_network.weight_offsets,
-    //             &decoder_network.bias_offsets,
-    //             &decoder_dimensions,
-    //         )?;
-    //         decoder_trained_network.save_network("./network/disney-rtnam/decoder.json")?;
-    //     }
-    // }
+            let decoder_trained_network = TrainedNetwork::from_data(
+                &state.cooperative_vector_fn,
+                &decoder_data,
+                &decoder_network.weight_offsets,
+                &decoder_network.bias_offsets,
+                &decoder_dimensions,
+            )?;
+            decoder_trained_network.save_network("./network/disney-rtnam/decoder.json")?;
+        }
+    }
 
-    // println!("\r  Second Phase Epoch {}/{} - Done", epochs, epochs);
+    println!("\r  Second Phase Epoch {}/{} - Done", epochs, epochs);
 
     let command_buffer = state.begin_single_time_commands();
 
@@ -2637,24 +2571,10 @@ pub fn train(
             .expect("Failed to free latent texture gradient buffer");
         state
             .device
-            .destroy_buffer(latent_texture_gradient_index_buffer, None);
-        state
-            .allocator()
-            .free(latent_texture_gradient_index_buffer_allocation)
-            .expect("Failed to free latent texture gradient index buffer");
-        state
-            .device
             .destroy_buffer(latent_texture_step_count_buffer, None);
         state
             .allocator()
             .free(latent_texture_step_count_buffer_allocation)
-            .expect("Failed to free latent texture gradient index buffer");
-        state
-            .device
-            .destroy_buffer(latent_texture_lock_buffer, None);
-        state
-            .allocator()
-            .free(latent_texture_lock_buffer_allocation)
             .expect("Failed to free latent texture gradient index buffer");
         state
             .device

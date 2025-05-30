@@ -55,21 +55,18 @@ StructuredBuffer<float> latentTextureParams;
 RWStructuredBuffer<float> latentTextureGradients;
 
 [[vk::binding(3)]]
-RWStructuredBuffer<uint> latentTextureGradientIndex;
-
-[[vk::binding(4)]]
 StructuredBuffer<half> decoderNetworkParams;
 
-[[vk::binding(5)]]
+[[vk::binding(4)]]
 RWStructuredBuffer<half> decoderGradients;
 
-[[vk::binding(6)]]
+[[vk::binding(5)]]
 Sampler2D baseColorSampler;
 
-[[vk::binding(7)]]
+[[vk::binding(6)]]
 Sampler2D roughnessMetallicSampler;
 
-[[vk::binding(8)]]
+[[vk::binding(7)]]
 Sampler2D normalSampler;
 
 struct Model
@@ -432,63 +429,40 @@ func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
 
 func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
 {
-    let mipLevelFloor = floor(mipLevel);
+    let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);
+    let metallicRoughness =
+        roughnessMetallicSampler.SampleLevel(uv, mipLevel);
+    let normal = normalSampler.SampleLevel(uv, mipLevel).xyz * 2 - 1;
+    let roughness = metallicRoughness.g;
+    let metallic = metallicRoughness.b;
 
-    let iteration = 64;
+    let TBN = createTbn(normal);
 
-    var brdf = float3(0.0);
-    for (var i = 0; i < iteration; ++i)
-    {
-        let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
+    let wi_tangent = mul(TBN, wi);
+    let wo_tangent = mul(TBN, wo);
+    let brdf = DisneyBRDF(wi_tangent, wo_tangent, srgbToLinear(baseColor.rgb), roughness, metallic);
 
-        let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
-        let metallicRoughness =
-            roughnessMetallicSampler.SampleLevel(uv_modify, mipLevelFloor);
-        let normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz * 2 - 1;
-        let roughness = metallicRoughness.g;
-        let metallic = metallicRoughness.b;
-
-        let TBN = createTbn(normal);
-
-        let wi_tangent = mul(TBN, wi);
-        let wo_tangent = mul(TBN, wo);
-        brdf += DisneyBRDF(wi_tangent, wo_tangent, srgbToLinear(baseColor.rgb), roughness, metallic);
-    }
-
-    brdf /= float(iteration);
     return brdf;
 }
 
-func inputParametersIndex(uv: float2, mipLevel: float)->uint
+func calculateMipLevelAndUv(index: uint, out mipLevel: float, out uv: float2)
 {
-    // Select lower mip level
-    let mipLevelFloor = floor(mipLevel);
-
-    // Calculate pixel offset in latent texture buffer
     var currentMipLevel = 0;
     var currentMipSize = uniforms.textureSize;
     var currentPixelOffset = 0;
     while (currentMipSize > 1)
     {
-        if (mipLevelFloor == currentMipLevel)
+        if (index < currentPixelOffset + currentMipSize * currentMipSize)
             break;
 
         currentPixelOffset += currentMipSize * currentMipSize;
         currentMipSize /= 2;
         currentMipLevel++;
     }
-    let st = uint2(
-        uint(uv.x * currentMipSize),
-        uint(uv.y * currentMipSize));
-    let latentTexturePixelIndex = currentPixelOffset + st.y * currentMipSize + st.x;
 
-    if (latentTexturePixelIndex >= uniforms.latentTexturePixelSize)
-    {
-        printf("latentTexturePixelIndex out of bounds: mip level %d, st.x %d, st.y %d\n", currentMipLevel, st.x, st.y);
-    }
-
-    // Calculate index in latent texture parameters buffer
-    return latentTexturePixelIndex;
+    mipLevel = float(currentMipLevel);
+    uv.x = float((index - currentPixelOffset) % currentMipSize) / float(currentMipSize);
+    uv.y = float((index - currentPixelOffset) / currentMipSize) / float(currentMipSize);
 }
 
 [Differentiable]
@@ -530,10 +504,9 @@ func LogL1LossDerivative(
 [numthreads(64, 1, 1)]
 void main(uint3 tid: SV_DispatchThreadID)
 {
-    uint batchSize = uniforms.batchSize;
     uint i = tid.x;
 
-    if (i >= batchSize)
+    if (i >= uniforms.latentTexturePixelSize)
         return;
 
     PCG32 rng = PCG32(pc.seed, i);
@@ -543,24 +516,24 @@ void main(uint3 tid: SV_DispatchThreadID)
     float3 wo;
     sampleWiWo(rng, wi, wo);
 
-    // sample uv
-    let uv = float2(rng.nextFloat(), rng.nextFloat());
-    let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
+    // calculate uv
+    float mipLevel;
+    float2 uv;
+    calculateMipLevelAndUv(i, mipLevel, uv);
 
     // calculate actual BRDF
     let actualBrdf = actualBrdfFunc(rng, wi, wo, uv, mipLevel);
 
     // calculate model BRDF
-    let parameterIndex = inputParametersIndex(uv, mipLevel);
     CoopVec<half, 8> input = {
-        half(latentTextureParams[8 * parameterIndex + 0]),
-        half(latentTextureParams[8 * parameterIndex + 1]),
-        half(latentTextureParams[8 * parameterIndex + 2]),
-        half(latentTextureParams[8 * parameterIndex + 3]),
-        half(latentTextureParams[8 * parameterIndex + 4]),
-        half(latentTextureParams[8 * parameterIndex + 5]),
-        half(latentTextureParams[8 * parameterIndex + 6]),
-        half(latentTextureParams[8 * parameterIndex + 7]),
+        half(latentTextureParams[8 * i + 0]),
+        half(latentTextureParams[8 * i + 1]),
+        half(latentTextureParams[8 * i + 2]),
+        half(latentTextureParams[8 * i + 3]),
+        half(latentTextureParams[8 * i + 4]),
+        half(latentTextureParams[8 * i + 5]),
+        half(latentTextureParams[8 * i + 6]),
+        half(latentTextureParams[8 * i + 7]),
     };
 
     var model = Model(
@@ -589,5 +562,4 @@ void main(uint3 tid: SV_DispatchThreadID)
     latentTextureGradients[i * 8 + 5] += float(inputParams.d[5]);
     latentTextureGradients[i * 8 + 6] += float(inputParams.d[6]);
     latentTextureGradients[i * 8 + 7] += float(inputParams.d[7]);
-    latentTextureGradientIndex[i] = parameterIndex;
 }

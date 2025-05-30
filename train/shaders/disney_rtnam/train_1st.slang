@@ -516,14 +516,12 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
 {
     let mipLevelFloor = floor(mipLevel);
 
-    // let iteration = 64;
-    let iteration = 1;
+    let iteration = 64;
 
     var brdf = float3(0.0);
     for (var i = 0; i < iteration; ++i)
     {
-        // let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
-        let uv_modify = uv;
+        let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
         let metallicRoughness =
@@ -599,8 +597,7 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample uv
     let uv = float2(rng.nextFloat(), rng.nextFloat());
-    // let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
-    let mipLevel = 0.0;
+    let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
 
     // calculate actual BRDF
     let actualBrdf = actualBrdfFunc(rng, wi, wo, uv, mipLevel);

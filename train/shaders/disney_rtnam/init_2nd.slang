@@ -50,42 +50,39 @@ RWStructuredBuffer<float> latentTextureParams;
 RWStructuredBuffer<float> latentTextureGradients;
 
 [[vk::binding(3)]]
-RWStructuredBuffer<uint> latentTextureGradientIndex;
-
-[[vk::binding(4)]]
 RWStructuredBuffer<uint> latentTextureStepCount;
 
-[[vk::binding(5)]]
+[[vk::binding(4)]]
 RWStructuredBuffer<float> latentTextureMoments1;
 
-[[vk::binding(6)]]
+[[vk::binding(5)]]
 RWStructuredBuffer<float> latentTextureMoments2;
 
-[[vk::binding(7)]]
+[[vk::binding(6)]]
 RWStructuredBuffer<half> decoderNetworkParams;
 
-[[vk::binding(8)]]
+[[vk::binding(7)]]
 RWStructuredBuffer<float> decoderNetworkParamsFloat;
 
-[[vk::binding(9)]]
+[[vk::binding(8)]]
 RWStructuredBuffer<half> decoderGradients;
 
-[[vk::binding(10)]]
+[[vk::binding(9)]]
 RWStructuredBuffer<float> decoderMoments1;
 
-[[vk::binding(11)]]
+[[vk::binding(10)]]
 RWStructuredBuffer<float> decoderMoments2;
 
-[[vk::binding(12)]]
+[[vk::binding(11)]]
 StructuredBuffer<half> encoderNetworkParams;
 
-[[vk::binding(13)]]
+[[vk::binding(12)]]
 Sampler2D baseColorSampler;
 
-[[vk::binding(14)]]
+[[vk::binding(13)]]
 Sampler2D roughnessMetallicSampler;
 
-[[vk::binding(15)]]
+[[vk::binding(14)]]
 Sampler2D normalSampler;
 
 struct EncoderModel
@@ -251,7 +248,6 @@ void main(uint3 tid: SV_DispatchThreadID)
         // Initialize latent texture gradients
         i -= uniforms.latentTexturePixelSize + uniforms.decoderParamsSize;
         latentTextureGradients[i] = 0.0;
-        latentTextureGradientIndex[i] = 0;
         latentTextureStepCount[i] = 0;
     }
 }
