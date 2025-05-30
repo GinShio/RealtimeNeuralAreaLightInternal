@@ -9,8 +9,9 @@ import "../rtxns/PCG32";
 import "../rtxns/Utils";
 
 import "disney";
+import "coopvec_utils";
 
-#define LOSS_SCALE 10000.0
+#define LOSS_SCALE 65536.0
 
 using namespace rtxns;
 using namespace rtxns::mlp;
@@ -204,10 +205,10 @@ struct Model
         inout transformFrameOutput: DifferentialPair<CoopVec<half, 12>>,
         grad: CoopVec<half, 20>.Differential)
     {
-        CoopVec<half, 8> latentVectorGrad = latentVector.d;
+        CoopVec<half, 8> latentVectorGrad;
         for (var i = 0; i < 8; i++)
         {
-            latentVectorGrad[i] += grad[i];
+            latentVectorGrad[i] = grad[i];
         }
         latentVector = diffPair(
             latentVector.p,
@@ -244,10 +245,14 @@ struct Model
         // decoder
         CoopVec<half, 3> output;
 
+        let latentVectorTuple = duplicateCoopVec(latentVector);
+        let latentVector_0 = latentVectorTuple._0;
+        let latentVector_1 = latentVectorTuple._1;
+
         // decoder transform frame
         CoopVec<half, 12> transformFrameInput;
         transformFrameInput = LinearOp<half, 12, 8>(
-            latentVector,
+            latentVector_0,
             decoderParams,
             uint2(
                 uniforms.decoderWeightOffsets1[0],
@@ -263,7 +268,7 @@ struct Model
         // decoder input
         CoopVec<half, 20> decoderInputParams;
         decoderInputParams = combineLatentVectorAndTransformFrame(
-            latentVector,
+            latentVector_1,
             transformFrameOutput);
 
         // decoder 1st layer
@@ -483,7 +488,7 @@ func inputParametersIndex(uv: float2, mipLevel: float)->uint
     }
 
     // Calculate index in latent texture parameters buffer
-    return latentTexturePixelIndex * 8;
+    return latentTexturePixelIndex;
 }
 
 [Differentiable]
@@ -548,14 +553,14 @@ void main(uint3 tid: SV_DispatchThreadID)
     // calculate model BRDF
     let parameterIndex = inputParametersIndex(uv, mipLevel);
     CoopVec<half, 8> input = {
-        half(latentTextureParams[parameterIndex + 0]),
-        half(latentTextureParams[parameterIndex + 1]),
-        half(latentTextureParams[parameterIndex + 2]),
-        half(latentTextureParams[parameterIndex + 3]),
-        half(latentTextureParams[parameterIndex + 4]),
-        half(latentTextureParams[parameterIndex + 5]),
-        half(latentTextureParams[parameterIndex + 6]),
-        half(latentTextureParams[parameterIndex + 7]),
+        half(latentTextureParams[8 * parameterIndex + 0]),
+        half(latentTextureParams[8 * parameterIndex + 1]),
+        half(latentTextureParams[8 * parameterIndex + 2]),
+        half(latentTextureParams[8 * parameterIndex + 3]),
+        half(latentTextureParams[8 * parameterIndex + 4]),
+        half(latentTextureParams[8 * parameterIndex + 5]),
+        half(latentTextureParams[8 * parameterIndex + 6]),
+        half(latentTextureParams[8 * parameterIndex + 7]),
     };
 
     var model = Model(

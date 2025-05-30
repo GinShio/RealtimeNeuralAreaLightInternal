@@ -1,10 +1,12 @@
 {
   "cSpell.words": [
     "bindless",
+    "bitangent",
     "bitangnet",
     "BRDF",
     "bytemuck",
     "clippy",
+    "coopvec",
     "CUDA",
     "cudnn",
     "direnv",

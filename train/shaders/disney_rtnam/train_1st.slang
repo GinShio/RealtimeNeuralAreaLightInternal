@@ -9,8 +9,9 @@ import "../rtxns/PCG32";
 import "../rtxns/Utils";
 
 import "disney";
+import "coopvec_utils";
 
-#define LOSS_SCALE 10000.0
+#define LOSS_SCALE 65536.0
 
 using namespace rtxns;
 using namespace rtxns::mlp;
@@ -199,10 +200,10 @@ struct Model
         inout transformFrameOutput: DifferentialPair<CoopVec<half, 12>>,
         grad: CoopVec<half, 20>.Differential)
     {
-        CoopVec<half, 8> latentVectorGrad = latentVector.d;
+        CoopVec<half, 8> latentVectorGrad;
         for (var i = 0; i < 8; i++)
         {
-            latentVectorGrad[i] += grad[i];
+            latentVectorGrad[i] = grad[i];
         }
         latentVector = diffPair(
             latentVector.p,
@@ -297,10 +298,14 @@ struct Model
         // decoder
         CoopVec<half, 3> output;
 
+        let latentVectorTuple = duplicateCoopVec(latentVector);
+        let latentVector_0 = latentVectorTuple._0;
+        let latentVector_1 = latentVectorTuple._1;
+
         // decoder transform frame
         CoopVec<half, 12> transformFrameInput;
         transformFrameInput = LinearOp<half, 12, 8>(
-            latentVector,
+            latentVector_0,
             decoderParams,
             uint2(
                 uniforms.decoderWeightOffsets1[0],
@@ -316,7 +321,7 @@ struct Model
         // decoder input
         CoopVec<half, 20> decoderInputParams;
         decoderInputParams = combineLatentVectorAndTransformFrame(
-            latentVector,
+            latentVector_1,
             transformFrameOutput);
 
         // decoder 1st layer

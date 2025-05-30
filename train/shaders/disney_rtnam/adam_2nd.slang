@@ -1,6 +1,6 @@
 import "../rtxns/Optimizers";
 
-#define LOSS_SCALE 10000.0
+#define LOSS_SCALE 65536.0
 
 struct PushConstants
 {
@@ -93,6 +93,10 @@ void main(uint3 tid: SV_DispatchThreadID)
             decoderNetworkParamsFloat[i] = adjustedWeightbias;
             decoderNetworkParams[i] = (half)adjustedWeightbias;
         }
+        else
+        {
+            printf("Non-finite decoder gradient at index %u: %f\n", i, decoderGradient);
+        }
     }
     else
     {
@@ -126,6 +130,10 @@ void main(uint3 tid: SV_DispatchThreadID)
                 latentTextureParams[index] = adjustedWeightbias;
 
                 InterlockedExchange(latentTextureLock[index], 0); // release lock
+            }
+            else
+            {
+                printf("Non-finite latent texture gradient at index %u: %f\n", i, latentTextureGradient);
             }
         }
     }
