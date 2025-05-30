@@ -202,9 +202,10 @@ void main(uint3 tid: SV_DispatchThreadID)
         }
 
         // calculate UV
-        let uv = float2(
+        var uv = float2(
             float((i - currentPixelOffset) % currentMipSize) / float(currentMipSize),
             float((i - currentPixelOffset) / currentMipSize) / float(currentMipSize));
+        uv += float2(0.5, 0.5) / float(currentMipSize);
 
         // Sample parameters from textures
         let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);

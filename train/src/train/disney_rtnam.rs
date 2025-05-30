@@ -5,7 +5,6 @@ use std::path::Path;
 
 use anyhow::Result;
 use ash::vk;
-use glam::FloatExt;
 use rand::prelude::*;
 
 use crate::utils::save_mip_image;
@@ -1823,10 +1822,11 @@ pub fn train(
 
         for j in 0..batch_count {
             let seed = rng.random();
-            let learning_rate = learning_rate_start.lerp(
-                learning_rate_end,
-                (i * batch_count + j) as f32 / (epochs * batch_count) as f32,
-            );
+            let learning_rate_scale = 0.1
+                + 0.5
+                    * (1.0 - 0.1)
+                    * (1.0 + (i as f32 * std::f32::consts::PI / epochs as f32).cos());
+            let learning_rate = learning_rate_start * learning_rate_scale;
 
             // training pass
             unsafe {

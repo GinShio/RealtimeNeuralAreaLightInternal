@@ -1,6 +1,6 @@
 import "../rtxns/Optimizers";
 
-#define LOSS_SCALE 65536.0
+#define LOSS_SCALE 262144.0
 
 struct PushConstants
 {

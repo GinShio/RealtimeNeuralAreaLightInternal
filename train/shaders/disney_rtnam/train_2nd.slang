@@ -11,7 +11,7 @@ import "../rtxns/Utils";
 import "disney";
 import "coopvec_utils";
 
-#define LOSS_SCALE 65536.0
+#define LOSS_SCALE 262144.0
 
 using namespace rtxns;
 using namespace rtxns::mlp;
@@ -467,14 +467,6 @@ func calculateMipLevelAndUv(index: uint, out mipLevel: float, out uv: float2)
 }
 
 [Differentiable]
-func log1p1(x: float)->float
-{
-    var ret = x;
-    ret = log(1.0 + ret);
-    return ret;
-}
-
-[Differentiable]
 func log1p4(x: float)->float
 {
     var ret = x;
@@ -491,8 +483,8 @@ func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)-
     var loss : float = 0.0;
     for (var i = 0; i < 3; ++i)
     {
-        let t = log1p1(target[i]);
-        let p = log1p1(predicted[i]);
+        let t = log1p4(target[i]);
+        let p = log1p4(predicted[i]);
         loss += abs(t - p);
     }
     return loss * scale;
@@ -553,7 +545,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     float3 predictedBrdf = { output[0], output[1], output[2] };
 
     // calculate loss
-    let scale = LOSS_SCALE / (uniforms.batchSize * 3);
+    let scale = LOSS_SCALE / (uniforms.latentTexturePixelSize * 3);
     let loss = LogL1Loss(actualBrdf, predictedBrdf, scale);
     let lossD = LogL1LossDerivative(actualBrdf, predictedBrdf, scale, loss);
 
