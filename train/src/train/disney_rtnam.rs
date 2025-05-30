@@ -1883,7 +1883,6 @@ pub fn train(
     let mut rng = rand::rng();
     for i in 0..epochs {
         print!("\r  First Phase Epoch {}/{}", i + 1, epochs);
-        // print!("  First Phase Epoch {}/{}\n", i + 1, epochs);
         std::io::stdout().flush().expect("Failed to flush stdout");
 
         // begin command buffer
@@ -2055,7 +2054,6 @@ pub fn train(
     }
 
     println!("\r  First Phase Epoch {}/{} - Done", epochs, epochs);
-    // println!("  First Phase Epoch {}/{} - Done", epochs, epochs);
 
     // === 2nd Phase ===
 
@@ -2155,250 +2153,248 @@ pub fn train(
             .allocate_command_buffers(&command_buffer_allocate_info)?
     }[0];
 
-    // training loop
-    let mut rng = rand::rng();
-    for i in 0..epochs {
-        print!("\r  Second Phase Epoch {}/{}", i + 1, epochs);
-        // print!("  Second Phase Epoch {}/{}\n", i + 1, epochs);
-        std::io::stdout().flush().expect("Failed to flush stdout");
+    // // training loop
+    // let mut rng = rand::rng();
+    // for i in 0..epochs {
+    //     print!("\r  Second Phase Epoch {}/{}", i + 1, epochs);
+    //     std::io::stdout().flush().expect("Failed to flush stdout");
 
-        // begin command buffer
-        unsafe {
-            state
-                .device
-                .begin_command_buffer(command_buffer, &vk::CommandBufferBeginInfo::default())?;
-        }
+    //     // begin command buffer
+    //     unsafe {
+    //         state
+    //             .device
+    //             .begin_command_buffer(command_buffer, &vk::CommandBufferBeginInfo::default())?;
+    //     }
 
-        for j in 0..batch_count {
-            let seed = rng.random();
+    //     for j in 0..batch_count {
+    //         let seed = rng.random();
 
-            // training pass
-            unsafe {
-                state.device.cmd_bind_pipeline(
-                    command_buffer,
-                    vk::PipelineBindPoint::COMPUTE,
-                    second_phase_train_pipeline,
-                );
-                state.device.cmd_bind_descriptor_sets(
-                    command_buffer,
-                    vk::PipelineBindPoint::COMPUTE,
-                    second_phase_train_pipeline_layout,
-                    0,
-                    &[second_phase_train_descriptor_set],
-                    &[],
-                );
-                state.device.cmd_push_constants(
-                    command_buffer,
-                    second_phase_train_pipeline_layout,
-                    vk::ShaderStageFlags::COMPUTE,
-                    0,
-                    bytemuck::bytes_of(&SecondPhasePushConstants {
-                        seed,
-                        current_step: i * batch_count + j,
-                        _padding: 0,
-                    }),
-                );
-                state
-                    .device
-                    .cmd_dispatch(command_buffer, batch_size.div_ceil(32), 1, 1);
-            }
-            let buffer_memory_barriers = [
-                vk::BufferMemoryBarrier2::default()
-                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-                    .buffer(latent_texture_gradient_buffer)
-                    .offset(0)
-                    .size(vk::WHOLE_SIZE),
-                vk::BufferMemoryBarrier2::default()
-                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-                    .buffer(decoder_gradient_buffer)
-                    .offset(0)
-                    .size(vk::WHOLE_SIZE),
-            ];
-            let dependency_info =
-                vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
-            unsafe {
-                state
-                    .device
-                    .cmd_pipeline_barrier2(command_buffer, &dependency_info);
-            }
+    //         // training pass
+    //         unsafe {
+    //             state.device.cmd_bind_pipeline(
+    //                 command_buffer,
+    //                 vk::PipelineBindPoint::COMPUTE,
+    //                 second_phase_train_pipeline,
+    //             );
+    //             state.device.cmd_bind_descriptor_sets(
+    //                 command_buffer,
+    //                 vk::PipelineBindPoint::COMPUTE,
+    //                 second_phase_train_pipeline_layout,
+    //                 0,
+    //                 &[second_phase_train_descriptor_set],
+    //                 &[],
+    //             );
+    //             state.device.cmd_push_constants(
+    //                 command_buffer,
+    //                 second_phase_train_pipeline_layout,
+    //                 vk::ShaderStageFlags::COMPUTE,
+    //                 0,
+    //                 bytemuck::bytes_of(&SecondPhasePushConstants {
+    //                     seed,
+    //                     current_step: i * batch_count + j,
+    //                     _padding: 0,
+    //                 }),
+    //             );
+    //             state
+    //                 .device
+    //                 .cmd_dispatch(command_buffer, batch_size.div_ceil(32), 1, 1);
+    //         }
+    //         let buffer_memory_barriers = [
+    //             vk::BufferMemoryBarrier2::default()
+    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+    //                 .buffer(latent_texture_gradient_buffer)
+    //                 .offset(0)
+    //                 .size(vk::WHOLE_SIZE),
+    //             vk::BufferMemoryBarrier2::default()
+    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+    //                 .buffer(decoder_gradient_buffer)
+    //                 .offset(0)
+    //                 .size(vk::WHOLE_SIZE),
+    //         ];
+    //         let dependency_info =
+    //             vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
+    //         unsafe {
+    //             state
+    //                 .device
+    //                 .cmd_pipeline_barrier2(command_buffer, &dependency_info);
+    //         }
 
-            // optimization pass
-            unsafe {
-                state.device.cmd_bind_pipeline(
-                    command_buffer,
-                    vk::PipelineBindPoint::COMPUTE,
-                    second_phase_optimize_pipeline,
-                );
-                state.device.cmd_bind_descriptor_sets(
-                    command_buffer,
-                    vk::PipelineBindPoint::COMPUTE,
-                    second_phase_optimize_pipeline_layout,
-                    0,
-                    &[second_phase_optimization_descriptor_set],
-                    &[],
-                );
-                state.device.cmd_push_constants(
-                    command_buffer,
-                    second_phase_optimize_pipeline_layout,
-                    vk::ShaderStageFlags::COMPUTE,
-                    0,
-                    bytemuck::bytes_of(&SecondPhasePushConstants {
-                        seed,
-                        current_step: i * batch_count + j,
-                        _padding: 0,
-                    }),
-                );
-                state.device.cmd_dispatch(
-                    command_buffer,
-                    (decoder_total_params_count as u32 + batch_size).div_ceil(32),
-                    1,
-                    1,
-                );
-            }
-            let buffer_memory_barriers = [
-                vk::BufferMemoryBarrier2::default()
-                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-                    .buffer(latent_texture_params_buffer)
-                    .offset(0)
-                    .size(vk::WHOLE_SIZE),
-                vk::BufferMemoryBarrier2::default()
-                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-                    .buffer(latent_texture_gradient_buffer)
-                    .offset(0)
-                    .size(vk::WHOLE_SIZE),
-                vk::BufferMemoryBarrier2::default()
-                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-                    .buffer(decoder_network_params_buffer)
-                    .offset(0)
-                    .size(vk::WHOLE_SIZE),
-                vk::BufferMemoryBarrier2::default()
-                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
-                    .buffer(decoder_gradient_buffer)
-                    .offset(0)
-                    .size(vk::WHOLE_SIZE),
-            ];
-            let dependency_info =
-                vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
-            unsafe {
-                state
-                    .device
-                    .cmd_pipeline_barrier2(command_buffer, &dependency_info);
-            }
-        }
+    //         // optimization pass
+    //         unsafe {
+    //             state.device.cmd_bind_pipeline(
+    //                 command_buffer,
+    //                 vk::PipelineBindPoint::COMPUTE,
+    //                 second_phase_optimize_pipeline,
+    //             );
+    //             state.device.cmd_bind_descriptor_sets(
+    //                 command_buffer,
+    //                 vk::PipelineBindPoint::COMPUTE,
+    //                 second_phase_optimize_pipeline_layout,
+    //                 0,
+    //                 &[second_phase_optimization_descriptor_set],
+    //                 &[],
+    //             );
+    //             state.device.cmd_push_constants(
+    //                 command_buffer,
+    //                 second_phase_optimize_pipeline_layout,
+    //                 vk::ShaderStageFlags::COMPUTE,
+    //                 0,
+    //                 bytemuck::bytes_of(&SecondPhasePushConstants {
+    //                     seed,
+    //                     current_step: i * batch_count + j,
+    //                     _padding: 0,
+    //                 }),
+    //             );
+    //             state.device.cmd_dispatch(
+    //                 command_buffer,
+    //                 (decoder_total_params_count as u32 + batch_size).div_ceil(32),
+    //                 1,
+    //                 1,
+    //             );
+    //         }
+    //         let buffer_memory_barriers = [
+    //             vk::BufferMemoryBarrier2::default()
+    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+    //                 .buffer(latent_texture_params_buffer)
+    //                 .offset(0)
+    //                 .size(vk::WHOLE_SIZE),
+    //             vk::BufferMemoryBarrier2::default()
+    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+    //                 .buffer(latent_texture_gradient_buffer)
+    //                 .offset(0)
+    //                 .size(vk::WHOLE_SIZE),
+    //             vk::BufferMemoryBarrier2::default()
+    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+    //                 .buffer(decoder_network_params_buffer)
+    //                 .offset(0)
+    //                 .size(vk::WHOLE_SIZE),
+    //             vk::BufferMemoryBarrier2::default()
+    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+    //                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
+    //                 .buffer(decoder_gradient_buffer)
+    //                 .offset(0)
+    //                 .size(vk::WHOLE_SIZE),
+    //         ];
+    //         let dependency_info =
+    //             vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
+    //         unsafe {
+    //             state
+    //                 .device
+    //                 .cmd_pipeline_barrier2(command_buffer, &dependency_info);
+    //         }
+    //     }
 
-        if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
-            // Barrier to ensure all writes are visible before copying
-            let buffer_memory_barriers = [
-                vk::BufferMemoryBarrier2::default()
-                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .dst_stage_mask(vk::PipelineStageFlags2::COPY)
-                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-                    .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
-                    .buffer(latent_texture_params_buffer)
-                    .offset(0)
-                    .size(vk::WHOLE_SIZE),
-                vk::BufferMemoryBarrier2::default()
-                    .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                    .dst_stage_mask(vk::PipelineStageFlags2::COPY)
-                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
-                    .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
-                    .buffer(decoder_network_params_buffer)
-                    .offset(0)
-                    .size(vk::WHOLE_SIZE),
-            ];
-            let dependency_info =
-                vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
-            unsafe {
-                state
-                    .device
-                    .cmd_pipeline_barrier2(command_buffer, &dependency_info);
-            }
+    //     if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
+    //         // Barrier to ensure all writes are visible before copying
+    //         let buffer_memory_barriers = [
+    //             vk::BufferMemoryBarrier2::default()
+    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .dst_stage_mask(vk::PipelineStageFlags2::COPY)
+    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+    //                 .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
+    //                 .buffer(latent_texture_params_buffer)
+    //                 .offset(0)
+    //                 .size(vk::WHOLE_SIZE),
+    //             vk::BufferMemoryBarrier2::default()
+    //                 .src_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+    //                 .dst_stage_mask(vk::PipelineStageFlags2::COPY)
+    //                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+    //                 .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
+    //                 .buffer(decoder_network_params_buffer)
+    //                 .offset(0)
+    //                 .size(vk::WHOLE_SIZE),
+    //         ];
+    //         let dependency_info =
+    //             vk::DependencyInfo::default().buffer_memory_barriers(&buffer_memory_barriers);
+    //         unsafe {
+    //             state
+    //                 .device
+    //                 .cmd_pipeline_barrier2(command_buffer, &dependency_info);
+    //         }
 
-            // copy params to CPU buffer
-            unsafe {
-                state.device.cmd_copy_buffer(
-                    command_buffer,
-                    latent_texture_params_buffer,
-                    latent_texture_params_cpu_buffer,
-                    &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
-                        latent_texture_total_params_count * std::mem::size_of::<f32>() as u64,
-                    )],
-                );
-                state.device.cmd_copy_buffer(
-                    command_buffer,
-                    decoder_network_params_buffer,
-                    decoder_network_params_cpu_buffer,
-                    &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
-                        decoder_total_params_count * std::mem::size_of::<half::f16>() as u64,
-                    )],
-                );
-            }
-        }
+    //         // copy params to CPU buffer
+    //         unsafe {
+    //             state.device.cmd_copy_buffer(
+    //                 command_buffer,
+    //                 latent_texture_params_buffer,
+    //                 latent_texture_params_cpu_buffer,
+    //                 &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
+    //                     latent_texture_total_params_count * std::mem::size_of::<f32>() as u64,
+    //                 )],
+    //             );
+    //             state.device.cmd_copy_buffer(
+    //                 command_buffer,
+    //                 decoder_network_params_buffer,
+    //                 decoder_network_params_cpu_buffer,
+    //                 &[vk::BufferCopy::default().src_offset(0).dst_offset(0).size(
+    //                     decoder_total_params_count * std::mem::size_of::<half::f16>() as u64,
+    //                 )],
+    //             );
+    //         }
+    //     }
 
-        // end command buffer
-        unsafe {
-            state.device.end_command_buffer(command_buffer)?;
-        }
+    //     // end command buffer
+    //     unsafe {
+    //         state.device.end_command_buffer(command_buffer)?;
+    //     }
 
-        // submit command buffer
-        let command_buffers = [command_buffer];
-        let submit_info = vk::SubmitInfo::default().command_buffers(&command_buffers);
-        unsafe {
-            state
-                .device
-                .queue_submit(state.queue, &[submit_info], vk::Fence::null())?;
-            state.device.queue_wait_idle(state.queue)?;
-        }
-        // reset command buffer
-        unsafe {
-            state
-                .device
-                .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())?;
-        }
+    //     // submit command buffer
+    //     let command_buffers = [command_buffer];
+    //     let submit_info = vk::SubmitInfo::default().command_buffers(&command_buffers);
+    //     unsafe {
+    //         state
+    //             .device
+    //             .queue_submit(state.queue, &[submit_info], vk::Fence::null())?;
+    //         state.device.queue_wait_idle(state.queue)?;
+    //     }
+    //     // reset command buffer
+    //     unsafe {
+    //         state
+    //             .device
+    //             .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())?;
+    //     }
 
-        // Save parameters
-        if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
-            let latent_texture_data = latent_texture_params_cpu_buffer_allocation
-                .mapped_slice()
-                .expect("Failed to allocate CPU buffer for latent texture params");
-            save_mip_image(latent_texture_data, texture_size, "./network/disney-rtnam/")?;
+    //     // Save parameters
+    //     if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
+    //         let latent_texture_data = latent_texture_params_cpu_buffer_allocation
+    //             .mapped_slice()
+    //             .expect("Failed to allocate CPU buffer for latent texture params");
+    //         save_mip_image(latent_texture_data, texture_size, "./network/disney-rtnam/")?;
 
-            let decoder_data = decoder_network_params_cpu_buffer_allocation
-                .mapped_slice()
-                .expect("Failed to map network params CPU buffer")
-                .to_vec();
+    //         let decoder_data = decoder_network_params_cpu_buffer_allocation
+    //             .mapped_slice()
+    //             .expect("Failed to map network params CPU buffer")
+    //             .to_vec();
 
-            let decoder_trained_network = TrainedNetwork::from_data(
-                &state.cooperative_vector_fn,
-                &decoder_data,
-                &decoder_network.weight_offsets,
-                &decoder_network.bias_offsets,
-                &decoder_dimensions,
-            )?;
-            decoder_trained_network.save_network("./network/disney-rtnam/decoder.json")?;
-        }
-    }
+    //         let decoder_trained_network = TrainedNetwork::from_data(
+    //             &state.cooperative_vector_fn,
+    //             &decoder_data,
+    //             &decoder_network.weight_offsets,
+    //             &decoder_network.bias_offsets,
+    //             &decoder_dimensions,
+    //         )?;
+    //         decoder_trained_network.save_network("./network/disney-rtnam/decoder.json")?;
+    //     }
+    // }
 
-    println!("\r  Second Phase Epoch {}/{} - Done", epochs, epochs);
-    // println!("  Second Phase Epoch {}/{} - Done", epochs, epochs);
+    // println!("\r  Second Phase Epoch {}/{} - Done", epochs, epochs);
 
     let command_buffer = state.begin_single_time_commands();
 
