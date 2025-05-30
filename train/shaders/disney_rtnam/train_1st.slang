@@ -544,6 +544,14 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
 }
 
 [Differentiable]
+func log1p1(x: float)->float
+{
+    var ret = x;
+    ret = log(1.0 + ret);
+    return ret;
+}
+
+[Differentiable]
 func log1p4(x: float)->float
 {
     var ret = x;
@@ -560,8 +568,8 @@ func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)-
     var loss : float = 0.0;
     for (var i = 0; i < 3; ++i)
     {
-        let t = log1p4(target[i]);
-        let p = log1p4(predicted[i]);
+        let t = log1p1(target[i]);
+        let p = log1p1(predicted[i]);
         loss += abs(t - p);
     }
     return loss * scale;
