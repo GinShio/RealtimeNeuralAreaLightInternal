@@ -231,7 +231,7 @@ struct Model
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::ReLUAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::TrainingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
