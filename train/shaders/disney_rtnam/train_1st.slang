@@ -482,11 +482,11 @@ func createTbn(normal: float3)
     return float3x3(T, B, N);
 }
 
-func modifyWo(inout rng: PCG32, wo: float3)->float3
+func modifyWi(inout rng: PCG32, wi: float3)->float3
 {
     if (pc.currentStep >= uniforms.mollificationStep)
     {
-        return wo;
+        return wi;
     }
 
     let deg = 10.0 * pc.currentStep / uniforms.mollificationStep;
@@ -501,7 +501,7 @@ func modifyWo(inout rng: PCG32, wo: float3)->float3
         sinTheta * sin(phi),
         cosTheta);
 
-    let TBN = createTbn(wo);
+    let TBN = createTbn(wi);
 
     let modifiedWo = mul(TBN, localDir);
     return normalize(modifiedWo);
@@ -541,10 +541,10 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
 
         let TBN = createTbn(normal);
 
-        let wo_modify = modifyWo(rng, wo);
+        let wi_modify = modifyWi(rng, wi);
 
-        let wi_tangent = mul(TBN, wi);
-        let wo_tangent = mul(TBN, wo_modify);
+        let wi_tangent = mul(TBN, wi_modify);
+        let wo_tangent = mul(TBN, wo);
         brdf += DisneyBRDF(wi_tangent, wo_tangent, srgbToLinear(baseColor.rgb), roughness, metallic);
     }
 

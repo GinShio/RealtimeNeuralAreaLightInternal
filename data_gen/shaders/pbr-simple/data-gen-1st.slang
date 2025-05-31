@@ -137,6 +137,36 @@ func rotationMatrixFromEuler(euler: float3)->float3x3
     return mul(rotY, mul(rotX, rotZ));
 }
 
+func createTbn(normal: float3)
+    ->float3x3
+{
+    var T = float3(1, 0, 0);
+    var N = normalize(normal);
+    T = normalize(T - dot(T, N) * N);
+    let B = normalize(cross(N, T));
+    return float3x3(T, B, N);
+}
+
+func modifyWi(inout rng: PCG32, wi: float3)->float3
+{
+    let deg = 10.0 * pc.mollificationScale;
+
+    let cosThetaMax = cos(radians(deg));
+
+    let cosTheta = lerp(cosThetaMax, 1.0, rng.nextFloat());
+    let sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    let phi = 2.0 * PI * rng.nextFloat();
+    let localDir = float3(
+        sinTheta * cos(phi),
+        sinTheta * sin(phi),
+        cosTheta);
+
+    let TBN = createTbn(wi);
+
+    let modifiedWo = mul(TBN, localDir);
+    return normalize(modifiedWo);
+}
+
 func computeDistribution(
     inout rng: PCG32,
     baseColor: float3,
@@ -173,9 +203,11 @@ func computeDistribution(
         let distanceSquared = dot(lightPos, lightPos);
         let G = (NdotL * LnDotWi) / (distanceSquared + 1e-5);
 
+        let wo_modify = modifyWi(rng, wo);
+
         if (G > 0.0)
         {
-            let brdf = PbrBRDF(baseColor, roughness, metallic, normal, wo, wi);
+            let brdf = PbrBRDF(baseColor, roughness, metallic, normal, wo_modify, wi);
             D += brdf * G * area;
         }
     }
@@ -247,11 +279,17 @@ void main(uint3 tid: SV_DispatchThreadID)
     v3 = mul(rotationMatrix, v3) + lightTranslation;
     v4 = mul(rotationMatrix, v4) + lightTranslation;
 
-    // light vertex directions
+    // light vertex directions and distances
+    let maxDistance =
+        uniforms.maxLightDistance + uniforms.maxLightSize / 2.0 * sqrt(2.0);
     let v1Dir = normalize(v1);
+    let v1Dist = length(v1) / maxDistance;
     let v2Dir = normalize(v2);
+    let v2Dist = length(v2) / maxDistance;
     let v3Dir = normalize(v3);
+    let v3Dist = length(v3) / maxDistance;
     let v4Dir = normalize(v4);
+    let v4Dist = length(v4) / maxDistance;
 
     // compute D
     let D = computeDistribution(
@@ -265,7 +303,7 @@ void main(uint3 tid: SV_DispatchThreadID)
         area);
 
     // Save training data
-    let index = i * 24;
+    let index = i * 28;
     data[index + 0] = baseColor.x;
     data[index + 1] = baseColor.y;
     data[index + 2] = baseColor.z;
@@ -277,17 +315,21 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 8] = v1Dir.x;
     data[index + 9] = v1Dir.y;
     data[index + 10] = v1Dir.z;
-    data[index + 11] = v2Dir.x;
-    data[index + 12] = v2Dir.y;
-    data[index + 13] = v2Dir.z;
-    data[index + 14] = v3Dir.x;
-    data[index + 15] = v3Dir.y;
-    data[index + 16] = v3Dir.z;
-    data[index + 17] = v4Dir.x;
-    data[index + 18] = v4Dir.y;
-    data[index + 19] = v4Dir.z;
-    data[index + 20] = area;
-    data[index + 21] = log1p4(D.x);
-    data[index + 22] = log1p4(D.y);
-    data[index + 23] = log1p4(D.z);
+    data[index + 11] = v1Dist;
+    data[index + 12] = v2Dir.x;
+    data[index + 13] = v2Dir.y;
+    data[index + 14] = v2Dir.z;
+    data[index + 15] = v2Dist;
+    data[index + 16] = v3Dir.x;
+    data[index + 17] = v3Dir.y;
+    data[index + 18] = v3Dir.z;
+    data[index + 19] = v3Dist;
+    data[index + 20] = v4Dir.x;
+    data[index + 21] = v4Dir.y;
+    data[index + 22] = v4Dir.z;
+    data[index + 23] = v4Dist;
+    data[index + 24] = area;
+    data[index + 25] = log1p4(D.x);
+    data[index + 26] = log1p4(D.y);
+    data[index + 27] = log1p4(D.z);
 }

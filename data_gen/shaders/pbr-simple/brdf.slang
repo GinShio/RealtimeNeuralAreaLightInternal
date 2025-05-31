@@ -44,7 +44,7 @@ public func PbrBRDF(
     // === diffuse ===
 
     // Normalized Lambert
-    let kD = (1.0 - F) * (1.0 - metallic); // 金属には拡散反射なし
+    let kD = (1.0 - F) * (1.0 - metallic);
     let diffuse = kD * baseColor / PI;
 
     // === final BRDF ===

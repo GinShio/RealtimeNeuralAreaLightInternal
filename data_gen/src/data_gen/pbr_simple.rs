@@ -66,10 +66,10 @@ pub fn data_gen(
     // roughness (1)
     // metallic (1)
     // normal (3)
-    // vertex direction (3 * 4)
+    // vertex direction + distance ((3 + 1) * 4)
     // area (1)
     // Distribution (3)
-    let parameter_size = 24;
+    let parameter_size = 28;
 
     let texture_total_pixel_size = {
         let mut pixel_count = 0;
