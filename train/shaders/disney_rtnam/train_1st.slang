@@ -511,7 +511,7 @@ func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
 {
     let levelWidth = uniforms.textureSize / exp2(mipLevel);
     let pixelSize = 1.0 / levelWidth;
-    let sigma = 0.5 * pixelSize;
+    let sigma = 0.5 * 0.5 * pixelSize;
 
     // Box-Muller method for generating Gaussian noise
     let r = sqrt(-2.0 * log(max(rng.nextFloat(), 1e-6)));
