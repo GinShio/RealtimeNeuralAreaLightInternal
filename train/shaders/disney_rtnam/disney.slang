@@ -62,15 +62,15 @@ func DisneyBRDF(wi: float3, wo: float3, baseColor: float3, roughness: float, met
 {
     let specular = 0.5;
 
-    let NdotL = wi.z;
-    let NdotV = wo.z;
+    let NdotL = max(wi.z, 0.0);
+    let NdotV = max(wo.z, 0.0);
 
     if (NdotL <= 0 || NdotV <= 0)
         return float3(0, 0, 0);
 
     let H = normalize(wi + wo);
-    let NdotH = H.z;
-    let LdotH = dot(wi, H);
+    let NdotH = max(H.z, 0.0);
+    let LdotH = max(dot(wi, H), 0.0);
 
     let disneyParams = Disney(NdotL, NdotV, NdotH, LdotH, roughness);
 

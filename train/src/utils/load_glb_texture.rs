@@ -57,6 +57,7 @@ pub fn load_glb_texture(
                     vec![r, g, b, 255]
                 })
                 .collect::<Vec<u8>>();
+            assert!(img.format == gltf::image::Format::R8G8B8);
             create_texture_with_mipmap(
                 state,
                 width,
@@ -82,6 +83,7 @@ pub fn load_glb_texture(
                     vec![r, g, b, 255]
                 })
                 .collect::<Vec<u8>>();
+            assert!(img.format == gltf::image::Format::R8G8B8);
             create_texture_with_mipmap(
                 state,
                 width,
@@ -107,6 +109,7 @@ pub fn load_glb_texture(
                     vec![r, g, b, 255]
                 })
                 .collect::<Vec<u8>>();
+            assert!(img.format == gltf::image::Format::R8G8B8);
             create_texture_with_mipmap(
                 state,
                 width,

@@ -422,25 +422,33 @@ func sampleWiWo(
     out wi: float3,
     out wo: float3)
 {
-    let thetaH = acos(sqrt(1.0 - rng.nextFloat()));
-    let phiH = 2.0 * PI * rng.nextFloat();
-    let H = float3(
-        sin(thetaH) * cos(phiH),
-        sin(thetaH) * sin(phiH),
-        cos(thetaH));
+    for (var i = 0; i < 10; ++i)
+    {
+        let thetaH = acos(sqrt(1.0 - rng.nextFloat()));
+        let phiH = 2.0 * PI * rng.nextFloat();
+        let H = float3(
+            sin(thetaH) * cos(phiH),
+            sin(thetaH) * sin(phiH),
+            cos(thetaH));
 
-    let thetaDelta = acos(sqrt(1.0 - rng.nextFloat()));
-    let phiDelta = 2.0 * PI * rng.nextFloat();
-    let delta = float3(
-        sin(thetaDelta) * cos(phiDelta),
-        sin(thetaDelta) * sin(phiDelta),
-        cos(thetaDelta));
+        let thetaDelta = acos(sqrt(1.0 - rng.nextFloat()));
+        let phiDelta = 2.0 * PI * rng.nextFloat();
+        let delta = float3(
+            sin(thetaDelta) * cos(phiDelta),
+            sin(thetaDelta) * sin(phiDelta),
+            cos(thetaDelta));
 
-    let M = localToTangent(H);
-    let d = mul(M, delta);
+        let M = localToTangent(H);
+        let d = mul(M, delta);
 
-    wi = normalize(d);
-    wo = 2.0 * dot(wi, H) * H - wi;
+        wi = normalize(d);
+        wo = 2.0 * dot(wi, H) * H - wi;
+
+        if (wo.z >= 0.0 && wi.z >= 0.0)
+        {
+            return;
+        }
+    }
 }
 
 func computeMipCount(width: int)->int

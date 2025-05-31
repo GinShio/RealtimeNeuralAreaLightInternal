@@ -48,27 +48,6 @@ pub fn create_texture_with_mipmap(
         vk::Format::R8G8B8A8_UNORM => image::RgbaImage::from_raw(width, height, data.to_vec())
             .map(DynamicImage::ImageRgba8)
             .expect("Invalid RGBA8 image"),
-        vk::Format::R8G8B8_UNORM => image::RgbImage::from_raw(width, height, data.to_vec())
-            .map(DynamicImage::ImageRgb8)
-            .expect("Invalid RGB8 image"),
-        vk::Format::R16G16B16A16_UNORM => {
-            let raw: Vec<u16> = data
-                .chunks_exact(2)
-                .map(|b| u16::from_le_bytes([b[0], b[1]]))
-                .collect();
-            image::ImageBuffer::<image::Rgba<u16>, _>::from_raw(width, height, raw)
-                .map(DynamicImage::ImageRgba16)
-                .expect("Invalid RGBA16 image")
-        }
-        vk::Format::R32G32B32A32_SFLOAT => {
-            let raw: Vec<f32> = data
-                .chunks_exact(4)
-                .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-                .collect();
-            image::ImageBuffer::<image::Rgba<f32>, _>::from_raw(width, height, raw)
-                .map(DynamicImage::ImageRgba32F)
-                .expect("Invalid RGBA32F image")
-        }
         _ => image::load_from_memory(data).expect("Failed to decode image"),
     };
 
@@ -78,18 +57,6 @@ pub fn create_texture_with_mipmap(
     // Convert resized image to byte array for Vulkan
     let resized_data = match &resized {
         DynamicImage::ImageRgba8(img) => img.as_raw().clone(),
-        DynamicImage::ImageRgb8(img) => {
-            let rgba_img = DynamicImage::ImageRgb8(img.clone()).to_rgba8();
-            rgba_img.as_raw().clone()
-        }
-        DynamicImage::ImageRgba16(img) => {
-            let raw: &[u8] = bytemuck::cast_slice(img.as_raw());
-            raw.to_vec()
-        }
-        DynamicImage::ImageRgba32F(img) => {
-            let raw: &[u8] = bytemuck::cast_slice(img.as_raw());
-            raw.to_vec()
-        }
         _ => panic!("Unsupported image format for mipmap generation"),
     };
 
