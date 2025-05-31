@@ -217,8 +217,8 @@ void main(uint3 tid: SV_DispatchThreadID)
             half(baseColor.r),
             half(baseColor.g),
             half(baseColor.b),
-            half(roughnessMetallic.y),
-            half(roughnessMetallic.x),
+            half(roughnessMetallic.g),
+            half(roughnessMetallic.b),
             half(normal.x),
             half(normal.y),
             half(normal.z)
