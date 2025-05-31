@@ -493,7 +493,6 @@ func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)-
     for (var i = 0; i < 3; ++i)
     {
         let t = log1p4(target[i]);
-        // let p = log1p4(predicted[i]);
         let p = predicted[i];
         loss[i] = abs(t - p);
     }

@@ -570,7 +570,6 @@ func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)-
     for (var i = 0; i < 3; ++i)
     {
         let t = log1p4(target[i]);
-        // let p = log1p4(predicted[i]);
         let p = predicted[i];
         loss[i] = abs(t - p);
     }
@@ -616,8 +615,8 @@ void main(uint3 tid: SV_DispatchThreadID)
     let baseColor = baseColorSampler.SampleLevel(uv, mipLevel).rgb;
     let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
     let normal = normalSampler.SampleLevel(uv, mipLevel);
-    let roughness = metallicRoughness.y;
-    let metallic = metallicRoughness.x;
+    let roughness = metallicRoughness.g;
+    let metallic = metallicRoughness.b;
 
     CoopVec<half, 8> input = { baseColor.r, baseColor.g, baseColor.b, roughness, metallic, normal.x, normal.y, normal.z };
 

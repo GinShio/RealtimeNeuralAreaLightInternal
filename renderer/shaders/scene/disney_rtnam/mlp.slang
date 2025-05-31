@@ -313,7 +313,7 @@ struct Model
     MatrixBiasBuffer<half> decoderParameters;
 }
 
-func inverse_log1p4(y: float3) -> float3
+func inverse_log1p4(y: float3)->float3
 {
     float3 ret = y;
     ret = exp(ret) - 1.0;
