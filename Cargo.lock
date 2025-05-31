@@ -566,6 +566,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
+name = "data_gen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash",
+ "bytemuck",
+ "clap",
+ "exr",
+ "glam",
+ "gltf",
+ "gpu-allocator",
+ "image",
+ "rand 0.9.1",
+ "rand_distr",
+ "serde_json",
+ "walkdir",
+]
+
+[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
