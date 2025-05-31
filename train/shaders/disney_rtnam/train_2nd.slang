@@ -231,7 +231,7 @@ struct Model
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::SigmoidAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::TrainingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -485,7 +485,8 @@ func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)-
     for (var i = 0; i < 3; ++i)
     {
         let t = log1p4(target[i]);
-        let p = log1p4(predicted[i]);
+        // let p = log1p4(predicted[i]);
+        let p = predicted[i];
         loss[i] = abs(t - p);
     }
     return loss * scale;

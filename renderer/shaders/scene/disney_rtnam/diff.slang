@@ -230,7 +230,7 @@ struct Model
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::SigmoidAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::InferencingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -326,6 +326,16 @@ struct Model
     }
 
     MatrixBiasBuffer<half> decoderParameters;
+}
+
+func inverse_log1p4(y: float3) -> float3
+{
+    float3 ret = y;
+    ret = exp(ret) - 1.0;
+    ret = exp(ret) - 1.0;
+    ret = exp(ret) - 1.0;
+    ret = exp(ret) - 1.0;
+    return ret;
 }
 
 [shader("fragment")]
@@ -444,9 +454,10 @@ func fsMain(input: VertexOutput)->FragmentOutput
                 continue;
 
             let output = model.forward(latentVector, normalize(Lt), normalize(Vt));
+            let brdf = inverse_log1p4(float3(output[0], output[1], output[2]));
             let lightColor = srgbToLinear(light.color);
             let cosTheta = max(dot(Lt, Nt), 0.0);
-            mlpColor += float3(output[0], output[1], output[2]) * lightColor * light.intensity * cosTheta;
+            mlpColor += brdf * lightColor * light.intensity * cosTheta;
         }
     }
 

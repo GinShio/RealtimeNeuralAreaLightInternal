@@ -80,7 +80,7 @@ void main(uint3 tid: SV_DispatchThreadID)
         {
             float weightbias = decoderNetworkParamsFloat[i];
 
-            optimizers::Adam optimizer = optimizers::Adam(decoderMoments1, decoderMoments2, uniforms.learningRate, LOSS_SCALE);
+            optimizers::Adam optimizer = optimizers::Adam(decoderMoments1, decoderMoments2, uniforms.learningRate, LOSS_SCALE, 0.9, 0.999, 1e-7);
 
             float adjustedWeightbias = optimizer.step(weightbias, i, decoderGradient, pc.currentStep + 1);
 

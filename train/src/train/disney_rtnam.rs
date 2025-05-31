@@ -85,8 +85,8 @@ pub fn train(
 ) -> Result<()> {
     let batch_size = 1 << 16;
     let batch_count = 100;
-    let learning_rate_start = 1e-3;
-    let learning_rate_end = 1e-4;
+    let first_phase_learning_rate = 1e-3;
+    let second_phase_learning_rate = 1e-4;
     let mollification_step = epochs * batch_count / 15;
 
     // ===========================
@@ -1782,7 +1782,7 @@ pub fn train(
             bytemuck::bytes_of(&FirstPhasePushConstants {
                 seed: 0,
                 current_step: 0,
-                learning_rate: learning_rate_start,
+                learning_rate: first_phase_learning_rate,
             }),
         );
         state.device.cmd_dispatch(
@@ -1826,7 +1826,7 @@ pub fn train(
                 + 0.5
                     * (1.0 - 0.1)
                     * (1.0 + (i as f32 * std::f32::consts::PI / epochs as f32).cos());
-            let learning_rate = learning_rate_start * learning_rate_scale;
+            let learning_rate = first_phase_learning_rate * learning_rate_scale;
 
             // training pass
             unsafe {
@@ -2019,7 +2019,7 @@ pub fn train(
         decoder_bias_offsets_2: [decoder_network.bias_offsets[4], 0, 0, 0],
 
         batch_size,
-        learning_rate: learning_rate_end,
+        learning_rate: second_phase_learning_rate,
         latent_texture_pixel_size: latent_texture_total_pixel_count as u32,
         latent_texture_params_size: latent_texture_total_params_count as u32,
         decoder_params_size: decoder_total_params_count as u32,
@@ -2084,7 +2084,7 @@ pub fn train(
 
     // training loop
     let mut rng = rand::rng();
-    let epochs = (epochs / 5).max(1);
+    let epochs = (epochs / 10).max(1);
     for i in 0..epochs {
         print!("\r  Second Phase Epoch {}/{}", i + 1, epochs);
         std::io::stdout().flush().expect("Failed to flush stdout");
