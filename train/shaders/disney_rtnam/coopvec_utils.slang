@@ -11,6 +11,7 @@ public func duplicateCoopVec<let K : int>(
 {
     CoopVec<half, K> first;
     CoopVec<half, K> second;
+    [ForceUnroll]
     for (var i = 0; i < K; i++)
     {
         first[i] = latentVector[i];
@@ -27,4 +28,18 @@ public func duplicateCoopVec_Backward<let K : int>(
     latentVector = diffPair(
         latentVector.p,
         grad._0 + grad._1);
+}
+
+[BackwardDerivativeOf(tanh)]
+public func tanh_Backward<T : __BuiltinFloatingPointType, let K : int>(
+    inout v: DifferentialPair<CoopVec<T, K>>,
+    grad: CoopVec<T, K>.Differential)
+{
+    CoopVec<T, K> gradTanh;
+    [ForceUnroll]
+    for (var i = 0; i < K; i++)
+    {
+        gradTanh[i] = grad[i] * (T(1.0) - tanh(v.p[i]) * tanh(v.p[i]));
+    }
+    v = diffPair(v.p, gradTanh);
 }

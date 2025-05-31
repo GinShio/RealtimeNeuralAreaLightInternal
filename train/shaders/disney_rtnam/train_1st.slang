@@ -230,7 +230,7 @@ struct Model
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::ReLUAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::TrainingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -317,6 +317,7 @@ struct Model
             transformFrameInput,
             wi,
             wo);
+        transformFrameOutput = tanh(transformFrameOutput);
 
         // decoder input
         CoopVec<half, 20> decoderInputParams;
@@ -555,14 +556,14 @@ func log1p4(x: float)->float
 }
 
 [Differentiable]
-func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)->float
+func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)->float3
 {
-    var loss : float = 0.0;
+    var loss = float3(0.0);
     for (var i = 0; i < 3; ++i)
     {
         let t = log1p4(target[i]);
         let p = log1p4(predicted[i]);
-        loss += abs(t - p);
+        loss[i] = abs(t - p);
     }
     return loss * scale;
 }
@@ -571,7 +572,7 @@ func LogL1LossDerivative(
     target: float3,
     predicted: float3,
     scale: float,
-    loss: float)
+    loss: float3)
     ->float3
 {
     var predictedD = diffPair(predicted, float3(0.0));
