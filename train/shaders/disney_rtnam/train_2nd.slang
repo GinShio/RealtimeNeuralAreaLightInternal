@@ -231,7 +231,7 @@ struct Model
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::SigmoidAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::TrainingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -303,12 +303,34 @@ struct Model
         hidden = act.eval(hidden);
 
         // decoder 4th layer
-        output = LinearOp<half, 3, 64>(
+        hidden = LinearOp<half, 64, 64>(
             hidden,
             decoderParams,
             uint2(
                 uniforms.decoderWeightOffsets2[0],
                 uniforms.decoderBiasOffsets2[0]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 5th layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            decoderParams,
+            uint2(
+                uniforms.decoderWeightOffsets2[1],
+                uniforms.decoderBiasOffsets2[1]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 6th layer
+        output = LinearOp<half, 3, 64>(
+            hidden,
+            decoderParams,
+            uint2(
+                uniforms.decoderWeightOffsets2[2],
+                uniforms.decoderBiasOffsets2[2]),
             matrixLayout,
             componentType);
         output = decoderFinalAct.eval(output);
@@ -493,7 +515,6 @@ func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)-
     for (var i = 0; i < 3; ++i)
     {
         let t = log1p4(target[i]);
-        // let t = target[i];
         let p = predicted[i];
         loss[i] = abs(t - p);
     }

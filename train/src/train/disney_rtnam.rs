@@ -97,13 +97,29 @@ pub fn train(
 
     // input: base color (3), roughness, metallic, normal (3)
     // output: latent vector (8)
-    let encoder_dimensions = [(8, 64), (64, 64), (64, 64), (64, 64), (64, 8)];
+    let encoder_dimensions = [
+        (8, 64),
+        (64, 64),
+        (64, 64),
+        (64, 64),
+        (64, 64),
+        (64, 64),
+        (64, 8),
+    ];
 
     // transform frame input: latent vector (8)
     // transform frame output: transform frame (12)
     // decoder input: latent vector (8), transform frame (12)
     // decoder output: BRDF (3)
-    let decoder_dimensions = [(8, 12), (8 + 12, 64), (64, 64), (64, 64), (64, 3)];
+    let decoder_dimensions = [
+        (8, 12),
+        (8 + 12, 64),
+        (64, 64),
+        (64, 64),
+        (64, 64),
+        (64, 64),
+        (64, 3),
+    ];
 
     // Create encoder network
     let encoder_network =
@@ -1722,14 +1738,24 @@ pub fn train(
             encoder_network.weight_offsets[2],
             encoder_network.weight_offsets[3],
         ],
-        encoder_weight_offsets_2: [encoder_network.weight_offsets[4], 0, 0, 0],
+        encoder_weight_offsets_2: [
+            encoder_network.weight_offsets[4],
+            encoder_network.weight_offsets[5],
+            encoder_network.weight_offsets[6],
+            0,
+        ],
         encoder_bias_offsets_1: [
             encoder_network.bias_offsets[0],
             encoder_network.bias_offsets[1],
             encoder_network.bias_offsets[2],
             encoder_network.bias_offsets[3],
         ],
-        encoder_bias_offsets_2: [encoder_network.bias_offsets[4], 0, 0, 0],
+        encoder_bias_offsets_2: [
+            encoder_network.bias_offsets[4],
+            encoder_network.bias_offsets[5],
+            encoder_network.bias_offsets[6],
+            0,
+        ],
 
         decoder_weight_offsets_1: [
             decoder_network.weight_offsets[0],
@@ -1737,14 +1763,24 @@ pub fn train(
             decoder_network.weight_offsets[2],
             decoder_network.weight_offsets[3],
         ],
-        decoder_weight_offsets_2: [decoder_network.weight_offsets[4], 0, 0, 0],
+        decoder_weight_offsets_2: [
+            decoder_network.weight_offsets[4],
+            decoder_network.weight_offsets[5],
+            decoder_network.weight_offsets[6],
+            0,
+        ],
         decoder_bias_offsets_1: [
             decoder_network.bias_offsets[0],
             decoder_network.bias_offsets[1],
             decoder_network.bias_offsets[2],
             decoder_network.bias_offsets[3],
         ],
-        decoder_bias_offsets_2: [decoder_network.bias_offsets[4], 0, 0, 0],
+        decoder_bias_offsets_2: [
+            decoder_network.bias_offsets[4],
+            decoder_network.bias_offsets[5],
+            decoder_network.bias_offsets[6],
+            0,
+        ],
 
         batch_size,
         encoder_params_size: encoder_total_params_count as u32,
@@ -1994,14 +2030,24 @@ pub fn train(
             encoder_network.weight_offsets[2],
             encoder_network.weight_offsets[3],
         ],
-        encoder_weight_offsets_2: [encoder_network.weight_offsets[4], 0, 0, 0],
+        encoder_weight_offsets_2: [
+            encoder_network.weight_offsets[4],
+            encoder_network.weight_offsets[5],
+            encoder_network.weight_offsets[6],
+            0,
+        ],
         encoder_bias_offsets_1: [
             encoder_network.bias_offsets[0],
             encoder_network.bias_offsets[1],
             encoder_network.bias_offsets[2],
             encoder_network.bias_offsets[3],
         ],
-        encoder_bias_offsets_2: [encoder_network.bias_offsets[4], 0, 0, 0],
+        encoder_bias_offsets_2: [
+            encoder_network.bias_offsets[4],
+            encoder_network.bias_offsets[5],
+            encoder_network.bias_offsets[6],
+            0,
+        ],
 
         decoder_weight_offsets_1: [
             decoder_network.weight_offsets[0],
@@ -2009,14 +2055,24 @@ pub fn train(
             decoder_network.weight_offsets[2],
             decoder_network.weight_offsets[3],
         ],
-        decoder_weight_offsets_2: [decoder_network.weight_offsets[4], 0, 0, 0],
+        decoder_weight_offsets_2: [
+            decoder_network.weight_offsets[4],
+            decoder_network.weight_offsets[5],
+            decoder_network.weight_offsets[6],
+            0,
+        ],
         decoder_bias_offsets_1: [
             decoder_network.bias_offsets[0],
             decoder_network.bias_offsets[1],
             decoder_network.bias_offsets[2],
             decoder_network.bias_offsets[3],
         ],
-        decoder_bias_offsets_2: [decoder_network.bias_offsets[4], 0, 0, 0],
+        decoder_bias_offsets_2: [
+            decoder_network.bias_offsets[4],
+            decoder_network.bias_offsets[5],
+            decoder_network.bias_offsets[6],
+            0,
+        ],
 
         batch_size,
         learning_rate: second_phase_learning_rate,
