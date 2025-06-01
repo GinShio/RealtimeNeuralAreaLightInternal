@@ -555,7 +555,7 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // calculate loss
     let scale = LOSS_SCALE / (uniforms.latentTexturePixelSize * 3);
-    let loss = LogL1Loss(actualBrdf, predictedBrdf, scale) * float3(1.0, 1.0, 1.5);
+    let loss = LogL1Loss(actualBrdf, predictedBrdf, scale);
     let lossD = LogL1LossDerivative(actualBrdf, predictedBrdf, scale, loss);
 
     // backward

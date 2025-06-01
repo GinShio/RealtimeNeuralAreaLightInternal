@@ -80,12 +80,23 @@ void main(uint3 tid: SV_DispatchThreadID)
         {
             float weightbias = decoderNetworkParamsFloat[i];
 
+            let moment1 = decoderMoments1[i];
+            let moment2 = decoderMoments2[i];
+            if (isfinite(moment1) == false || isfinite(moment2) == false)
+            {
+                decoderMoments1[i] = 0.0;
+                decoderMoments2[i] = 0.0;
+            }
+
             optimizers::Adam optimizer = optimizers::Adam(decoderMoments1, decoderMoments2, uniforms.learningRate, LOSS_SCALE, 0.9, 0.999, 1e-7);
 
             float adjustedWeightbias = optimizer.step(weightbias, i, decoderGradient, pc.currentStep + 1);
 
-            decoderNetworkParamsFloat[i] = adjustedWeightbias;
-            decoderNetworkParams[i] = (half)adjustedWeightbias;
+            if (isfinite((half)adjustedWeightbias))
+            {
+                decoderNetworkParamsFloat[i] = adjustedWeightbias;
+                decoderNetworkParams[i] = (half)adjustedWeightbias;
+            }
         }
         else
         {
@@ -103,11 +114,22 @@ void main(uint3 tid: SV_DispatchThreadID)
         {
             float weightbias = latentTextureParams[i];
 
+            let moment1 = latentTextureMoments1[i];
+            let moment2 = latentTextureMoments2[i];
+            if (isfinite(moment1) == false || isfinite(moment2) == false)
+            {
+                latentTextureMoments1[i] = 0.0;
+                latentTextureMoments2[i] = 0.0;
+            }
+
             optimizers::Adam optimizer = optimizers::Adam(latentTextureMoments1, latentTextureMoments2, uniforms.learningRate, LOSS_SCALE);
 
             float adjustedWeightbias = optimizer.step(weightbias, i, latentTextureGradient, pc.currentStep + 1);
 
-            latentTextureParams[i] = adjustedWeightbias;
+            if (isfinite(adjustedWeightbias))
+            {
+                latentTextureParams[i] = adjustedWeightbias;
+            }
         }
         else
         {

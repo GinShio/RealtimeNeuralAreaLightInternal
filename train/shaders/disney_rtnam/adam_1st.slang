@@ -1,6 +1,6 @@
 import "../rtxns/Optimizers";
 
-#define LOSS_SCALE 262144.0
+#define LOSS_SCALE 2048.0
 
 struct PushConstants
 {
@@ -73,19 +73,30 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     if (i < uniforms.encoderParamsSize)
     {
-        float encoderGradient = (float)encoderGradients[i];
+        float encoderGradient = (float)encoderGradients[i] / (uniforms.batchSize * 3);
         encoderGradients[i] = half(0.0);
 
         if (isfinite(encoderGradient))
         {
             float weightbias = encoderNetworkParamsFloat[i];
 
+            let moment1 = encoderMoments1[i];
+            let moment2 = encoderMoments2[i];
+            if (isfinite(moment1) == false || isfinite(moment2) == false)
+            {
+                encoderMoments1[i] = 0.0;
+                encoderMoments2[i] = 0.0;
+            }
+
             optimizers::Adam optimizer = optimizers::Adam(encoderMoments1, encoderMoments2, pc.learningRate, LOSS_SCALE, 0.9, 0.999, 1e-7);
 
             float adjustedWeightbias = optimizer.step(weightbias, i, encoderGradient, pc.currentStep + 1);
 
-            encoderNetworkParamsFloat[i] = adjustedWeightbias;
-            encoderNetworkParams[i] = (half)adjustedWeightbias;
+            if (isfinite((half)adjustedWeightbias))
+            {
+                encoderNetworkParamsFloat[i] = adjustedWeightbias;
+                encoderNetworkParams[i] = (half)adjustedWeightbias;
+            }
         }
         else
         {
@@ -95,19 +106,30 @@ void main(uint3 tid: SV_DispatchThreadID)
     else
     {
         i -= uniforms.encoderParamsSize;
-        float decoderGradient = (float)decoderGradients[i];
+        float decoderGradient = (float)decoderGradients[i] / (uniforms.batchSize * 3);
         decoderGradients[i] = half(0.0);
 
         if (isfinite(decoderGradient))
         {
             float weightbias = decoderNetworkParamsFloat[i];
 
+            let moment1 = decoderMoments1[i];
+            let moment2 = decoderMoments2[i];
+            if (isfinite(moment1) == false || isfinite(moment2) == false)
+            {
+                decoderMoments1[i] = 0.0;
+                decoderMoments2[i] = 0.0;
+            }
+
             optimizers::Adam optimizer = optimizers::Adam(decoderMoments1, decoderMoments2, pc.learningRate, LOSS_SCALE);
 
             float adjustedWeightbias = optimizer.step(weightbias, i, decoderGradient, pc.currentStep + 1);
 
-            decoderNetworkParamsFloat[i] = adjustedWeightbias;
-            decoderNetworkParams[i] = (half)adjustedWeightbias;
+            if (isfinite((half)adjustedWeightbias))
+            {
+                decoderNetworkParamsFloat[i] = adjustedWeightbias;
+                decoderNetworkParams[i] = (half)adjustedWeightbias;
+            }
         }
         else
         {

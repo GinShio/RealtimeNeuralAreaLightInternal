@@ -338,6 +338,42 @@ func inverse_log1p4(y: float3)->float3
     return ret;
 }
 
+[Differentiable]
+func log1p4(x: float)->float
+{
+    var ret = x;
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    return ret;
+}
+
+[Differentiable]
+func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)->float3
+{
+    var loss = float3(0.0);
+    for (var i = 0; i < 3; ++i)
+    {
+        let t = log1p4(target[i]);
+        let p = predicted[i];
+        loss[i] = abs(t - p);
+    }
+    return loss * scale;
+}
+
+func LogL1LossDerivative(
+    target: float3,
+    predicted: float3,
+    scale: float,
+    loss: float3)
+    ->float3
+{
+    var predictedD = diffPair(predicted, float3(0.0));
+    bwd_diff(LogL1Loss)(target, predictedD, scale, loss);
+    return predictedD.d;
+}
+
 [shader("fragment")]
 func fsMain(input: VertexOutput)->FragmentOutput
 {
@@ -383,6 +419,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
     let V = normalize(-input.viewPosition);
     let N = normalMap(input.viewNormal, input.viewTangent, normal);
 
+    var actualBrdf = float3(0.0);
     var analyticColor = float3(0.0, 0.0, 0.0);
     for (var i = 0; i < uniforms.light_count; i++)
     {
@@ -405,6 +442,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
         float3 brdfn = outParams.x * Cdlin * (1 - metallic) + outParams.y * lerp(Cspec0, float3(1), outParams.z) + outParams.w;
         float3 colorh = max(brdfn * float3(NdotL), 0.0) * light.intensity * light.color;
 
+        actualBrdf = brdfn;
         analyticColor += (NdotL > 0.0 && NdotV > 0.0) ? colorh : 0.0;
     }
 
@@ -415,6 +453,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
         latentValue1.r, latentValue1.g, latentValue1.b, latentValue1.a
     };
 
+    var mlpOutput = float3(0.0);
     var mlpColor = float3(0.0, 0.0, 0.0);
     {
         let latentValue0 = textures[uniforms.latentTexture0Index].Sample(sampler, input.uv);
@@ -457,6 +496,8 @@ func fsMain(input: VertexOutput)->FragmentOutput
             let brdf = inverse_log1p4(float3(output[0], output[1], output[2]));
             let lightColor = srgbToLinear(light.color);
             let cosTheta = max(dot(Lt, Nt), 0.0);
+
+            mlpOutput = float3(output[0], output[1], output[2]);
             mlpColor += brdf * lightColor * light.intensity * cosTheta;
         }
     }
@@ -473,6 +514,10 @@ func fsMain(input: VertexOutput)->FragmentOutput
     {
         diffColor = float3(0.0, 0.0, diffValue);
     }
+
+    // let scale = 10.0;
+    // let loss = LogL1Loss(actualBrdf, mlpOutput, scale);
+    // let lossD = LogL1LossDerivative(actualBrdf, mlpOutput, scale, loss);
 
     return {
         { diffColor, 1.0 },

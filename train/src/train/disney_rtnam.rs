@@ -83,10 +83,11 @@ pub fn train(
     epochs: u32,
     texture_size: u32,
 ) -> Result<()> {
-    let batch_size = 1 << 16;
+    // let batch_size = 1 << 16;
+    let batch_size = 512;
     let batch_count = 100;
     let first_phase_learning_rate = 1e-3;
-    let second_phase_learning_rate = 1e-4;
+    let second_phase_learning_rate = 1e-3;
     let mollification_step = epochs * batch_count / 15;
 
     // ===========================
@@ -1822,11 +1823,12 @@ pub fn train(
 
         for j in 0..batch_count {
             let seed = rng.random();
-            let learning_rate_scale = 0.1
-                + 0.5
-                    * (1.0 - 0.1)
-                    * (1.0 + (i as f32 * std::f32::consts::PI / epochs as f32).cos());
-            let learning_rate = first_phase_learning_rate * learning_rate_scale;
+            // let learning_rate_scale = 0.1
+            //     + 0.5
+            //         * (1.0 - 0.1)
+            //         * (1.0 + (i as f32 * std::f32::consts::PI / epochs as f32).cos());
+            // let learning_rate = first_phase_learning_rate * learning_rate_scale;
+            let learning_rate = first_phase_learning_rate;
 
             // training pass
             unsafe {
@@ -2134,7 +2136,7 @@ pub fn train(
 
     // training loop
     let mut rng = rand::rng();
-    let epochs = (epochs / 10).max(1);
+    let epochs = (epochs / 1280).max(1);
     for i in 0..epochs {
         print!("\r  Second Phase Epoch {}/{}", i + 1, epochs);
         std::io::stdout().flush().expect("Failed to flush stdout");

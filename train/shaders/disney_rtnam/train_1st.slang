@@ -11,7 +11,7 @@ import "../rtxns/Utils";
 import "disney";
 import "coopvec_utils";
 
-#define LOSS_SCALE 262144.0
+#define LOSS_SCALE 2048.0
 
 using namespace rtxns;
 using namespace rtxns::mlp;
@@ -631,7 +631,7 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // calculate loss
     let scale = LOSS_SCALE / (uniforms.batchSize * 3);
-    let loss = LogL1Loss(actualBrdf, predictedBrdf, scale) * float3(1.0, 1.0, 1.5);
+    let loss = LogL1Loss(actualBrdf, predictedBrdf, scale);
     let lossD = LogL1LossDerivative(actualBrdf, predictedBrdf, scale, loss);
 
     // backward
