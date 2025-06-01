@@ -32,10 +32,10 @@ struct UniformBuffer
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<float> materialData;
+RWStructuredBuffer<float> data;
 
 [[vk::binding(2)]]
-RWStructuredBuffer<float> data;
+RWStructuredBuffer<float> materialData;
 
 func localToTangent(v: float3)->float3x3
 {
@@ -123,6 +123,8 @@ func computeDistribution(
     const uint ITERATIONS = 1024;
     float3 D = float3(0.0, 0.0, 0.0);
 
+    let N = normal * 2 - 1; 
+
     let edge1 = v2 - v1;
     let edge2 = v4 - v1;
 
@@ -136,7 +138,7 @@ func computeDistribution(
         let lightPos = v1 + u * edge1 + v * edge2;
 
         let wi = normalize(lightPos);
-        let NdotL = saturate(dot(normal, wi));
+        let NdotL = saturate(dot(N, wi));
         let LnDotWi = saturate(dot(lightNormal, -wi));
 
         let distanceSquared = dot(lightPos, lightPos);
@@ -144,7 +146,7 @@ func computeDistribution(
 
         if (G > 0.0)
         {
-            let brdf = PbrBRDF(baseColor, roughness, metallic, normal, wo, wi);
+            let brdf = PbrBRDF(baseColor, roughness, metallic, N, wo, wi);
             D += brdf * G * area;
         }
     }

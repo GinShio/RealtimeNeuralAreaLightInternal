@@ -630,18 +630,20 @@ pub fn data_gen(
 
     let start = std::time::Instant::now();
     println!("Generating data...");
+    std::io::stdout().flush().expect("Failed to flush stdout");
 
     let mut rng = rand::rng();
 
     // Generate first phase data
     println!(
         "  First phase data generation: {} shards, {} floats per shard",
-        first_phase_shard_count, first_phase_shard_size
+        first_phase_shard_count, first_shard_buffer_size
     );
+    std::io::stdout().flush().expect("Failed to flush stdout");
     let first_start = std::time::Instant::now();
 
     let uniform_data = UniformBuffer {
-        data_size: first_phase_shard_size as u32,
+        data_size: (batch_size * first_phase_shard_size) as u32,
         texture_size: texture_size,
         max_light_size,
         max_light_distance,
@@ -692,7 +694,7 @@ pub fn data_gen(
             );
             state.device.cmd_dispatch(
                 command_buffer,
-                first_shard_buffer_size.div_ceil(64) as u32,
+                (batch_size * first_phase_shard_size).div_ceil(64) as u32,
                 1,
                 1,
             );
@@ -758,6 +760,7 @@ pub fn data_gen(
             "\r    Shard {} processed ({:02}m {:02}s {:02}ms)",
             i, minutes, seconds, millis
         );
+        std::io::stdout().flush().expect("Failed to flush stdout");
     }
 
     let elapsed = first_start.elapsed();
@@ -768,13 +771,26 @@ pub fn data_gen(
         "\r  First phase data generation completed ({:02}m {:02}s {:02}ms)",
         minutes, seconds, millis
     );
+    std::io::stdout().flush().expect("Failed to flush stdout");
 
     // Generate second phase material data
     println!(
         "  Second phase material data generation: {} shards, {} floats per shard",
-        second_phase_shard_count, second_phase_shard_size
+        second_phase_shard_count, second_material_buffer_size
     );
+    std::io::stdout().flush().expect("Failed to flush stdout");
     let second_material_start = std::time::Instant::now();
+
+    let uniform_data = UniformBuffer {
+        data_size: texture_total_pixel_size as u32,
+        texture_size: texture_size,
+        max_light_size,
+        max_light_distance,
+    };
+    uniform_buffer_allocation
+        .mapped_slice_mut()
+        .expect("Failed to map uniform buffer")[0..std::mem::size_of::<UniformBuffer>()]
+        .copy_from_slice(bytemuck::bytes_of(&uniform_data));
 
     let command_buffer = state.begin_single_time_commands();
     unsafe {
@@ -793,7 +809,7 @@ pub fn data_gen(
         );
         state.device.cmd_dispatch(
             command_buffer,
-            second_material_buffer_size.div_ceil(64) as u32,
+            texture_total_pixel_size.div_ceil(64) as u32,
             1,
             1,
         );
@@ -841,16 +857,29 @@ pub fn data_gen(
     let seconds = elapsed.as_secs() % 60;
     let millis = elapsed.subsec_millis();
     print!(
-        "\r    Save material data ({:02}m {:02}s {:02}ms)",
+        "  Second phase material data generation completed ({:02}m {:02}s {:02}ms)",
         minutes, seconds, millis
     );
+    std::io::stdout().flush().expect("Failed to flush stdout");
 
     // Generate second phase data
     println!(
         "  Second phase data generation: {} shards, {} floats per shard",
-        second_phase_shard_count, second_phase_shard_size
+        second_phase_shard_count, second_shard_buffer_size
     );
+    std::io::stdout().flush().expect("Failed to flush stdout");
     let second_start = std::time::Instant::now();
+
+    let uniform_data = UniformBuffer {
+        data_size: (texture_total_pixel_size * second_phase_shard_size) as u32,
+        texture_size: texture_size,
+        max_light_size,
+        max_light_distance,
+    };
+    uniform_buffer_allocation
+        .mapped_slice_mut()
+        .expect("Failed to map uniform buffer")[0..std::mem::size_of::<UniformBuffer>()]
+        .copy_from_slice(bytemuck::bytes_of(&uniform_data));
 
     for i in 0..second_phase_shard_count {
         let step_start = std::time::Instant::now();
@@ -887,7 +916,7 @@ pub fn data_gen(
             );
             state.device.cmd_dispatch(
                 command_buffer,
-                second_shard_buffer_size.div_ceil(64) as u32,
+                (texture_total_pixel_size * second_phase_shard_size).div_ceil(64) as u32,
                 1,
                 1,
             );
@@ -915,7 +944,7 @@ pub fn data_gen(
                 &[vk::BufferCopy::default()
                     .src_offset(0)
                     .dst_offset(0)
-                    .size(second_phase_shard_size * std::mem::size_of::<f32>() as u64)],
+                    .size(second_shard_buffer_size * std::mem::size_of::<f32>() as u64)],
             );
 
             state.end_single_time_commands(command_buffer);
@@ -940,6 +969,7 @@ pub fn data_gen(
             "\r    Shard {} processed ({:02}m {:02}s {:02}ms)",
             i, minutes, seconds, millis
         );
+        std::io::stdout().flush().expect("Failed to flush stdout");
     }
 
     let elapsed = second_start.elapsed();
@@ -950,6 +980,7 @@ pub fn data_gen(
         "\r  Second phase data generation completed ({:02}m {:02}s {:02}ms)",
         minutes, seconds, millis
     );
+    std::io::stdout().flush().expect("Failed to flush stdout");
 
     let elapsed = start.elapsed();
     let minutes = elapsed.as_secs() / 60;
@@ -959,6 +990,7 @@ pub fn data_gen(
         "  All data generation completed! ({:02}m {:02}s {:02}ms)",
         minutes, seconds, millis
     );
+    std::io::stdout().flush().expect("Failed to flush stdout");
 
     // === Cleanup ===
 
@@ -973,6 +1005,7 @@ pub fn data_gen(
         state
             .device
             .destroy_descriptor_set_layout(second_phase_descriptor_set_layout, None);
+
         state
             .device
             .destroy_descriptor_pool(first_phase_descriptor_pool, None);
@@ -982,8 +1015,10 @@ pub fn data_gen(
         state
             .device
             .destroy_descriptor_pool(second_phase_descriptor_pool, None);
+
         state.device.destroy_buffer(uniform_buffer, None);
         state.allocator().free(uniform_buffer_allocation)?;
+
         state.device.destroy_buffer(first_phase_data_buffer, None);
         state.allocator().free(first_phase_data_buffer_allocation)?;
         state
@@ -992,7 +1027,7 @@ pub fn data_gen(
         state
             .allocator()
             .free(first_phase_data_cpu_buffer_allocation)?;
-        state.device.destroy_buffer(second_phase_data_buffer, None);
+
         state
             .device
             .destroy_buffer(second_phase_material_data_buffer, None);
@@ -1005,6 +1040,7 @@ pub fn data_gen(
         state
             .allocator()
             .free(second_phase_material_data_cpu_buffer_allocation)?;
+
         state.device.destroy_buffer(second_phase_data_buffer, None);
         state
             .allocator()
@@ -1015,6 +1051,7 @@ pub fn data_gen(
         state
             .allocator()
             .free(second_phase_data_cpu_buffer_allocation)?;
+
         state.device.destroy_pipeline(first_phase_pipeline, None);
         state
             .device

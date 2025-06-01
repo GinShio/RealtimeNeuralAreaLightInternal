@@ -22,16 +22,17 @@ struct UniformBuffer
 {
     uint dataSize;
     uint textureSize;
+    uint pixelCount;
 }
 
 [[vk::binding(0)]]
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<float> materialData;
+RWStructuredBuffer<float> data;
 
 [[vk::binding(2)]]
-RWStructuredBuffer<float> data;
+RWStructuredBuffer<float> materialData;
 
 func localToTangent(v: float3)->float3x3
 {
@@ -68,48 +69,11 @@ func sampleWiWo(
         wi = normalize(d);
         wo = 2.0 * dot(wi, H) * H - wi;
 
-        if (wo.z >= 0.0)
+        if (wo.z >= 0.0 && wi.z >= 0.0)
         {
             return;
         }
     }
-}
-
-func rotationMatrixFromEuler(euler: float3)->float3x3
-{
-    let cx = cos(euler.x);
-    let sx = sin(euler.x);
-    let cy = cos(euler.y);
-    let sy = sin(euler.y);
-    let cz = cos(euler.z);
-    let sz = sin(euler.z);
-
-    let rotX = float3x3(
-        1.0, 0.0, 0.0,
-        0.0, cx, -sx,
-        0.0, sx, cx);
-
-    let rotY = float3x3(
-        cy, 0.0, sy,
-        0.0, 1.0, 0.0,
-        -sy, 0.0, cy);
-
-    let rotZ = float3x3(
-        cz, -sz, 0.0,
-        sz, cz, 0.0,
-        0.0, 0.0, 1.0);
-
-    return mul(rotY, mul(rotX, rotZ));
-}
-
-func createTbn(normal: float3)
-    ->float3x3
-{
-    var T = float3(1, 0, 0);
-    var N = normalize(normal);
-    T = normalize(T - dot(T, N) * N);
-    let B = normalize(cross(N, T));
-    return float3x3(T, B, N);
 }
 
 func actualBrdfFunc(
@@ -122,9 +86,9 @@ func actualBrdfFunc(
     normal: float3)
     ->float3
 {
-    let N = normal * 2 - 1;
+    let N = normalize(normal * 2 - 1);
 
-    let TBN = createTbn(N);
+    let TBN = localToTangent(N);
 
     let wi_tangent = mul(TBN, wi);
     let wo_tangent = mul(TBN, wo);
@@ -146,16 +110,17 @@ void main(uint3 tid: SV_DispatchThreadID)
     sampleWiWo(rng, wi, wo);
 
     // sample parameters
+    let materialBaseIndex = (i % uniforms.pixelCount) * 8;
     let baseColor = float3(
-        materialData[i * 8 + 0],
-        materialData[i * 8 + 1],
-        materialData[i * 8 + 2]);
-    let roughness = materialData[i * 8 + 3];
-    let metallic = materialData[i * 8 + 4];
+        materialData[materialBaseIndex + 0],
+        materialData[materialBaseIndex + 1],
+        materialData[materialBaseIndex + 2]);
+    let roughness = materialData[materialBaseIndex + 3];
+    let metallic = materialData[materialBaseIndex + 4];
     let normal = float3(
-        materialData[i * 8 + 5],
-        materialData[i * 8 + 6],
-        materialData[i * 8 + 7]);
+        materialData[materialBaseIndex + 5],
+        materialData[materialBaseIndex + 6],
+        materialData[materialBaseIndex + 7]);
 
     // compute brdf
     let brdf = actualBrdfFunc(

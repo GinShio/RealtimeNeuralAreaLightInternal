@@ -14,6 +14,7 @@ struct UniformBuffer
 {
     uint dataSize;
     uint textureSize;
+    uint pixelCount;
 }
 
 [[vk::binding(0)]]
@@ -86,9 +87,9 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // Save training data
     let index = i * 8;
-    data[index + 0] = baseColor.x;
-    data[index + 1] = baseColor.y;
-    data[index + 2] = baseColor.z;
+    data[index + 0] = baseColor.r;
+    data[index + 1] = baseColor.g;
+    data[index + 2] = baseColor.b;
     data[index + 3] = roughness;
     data[index + 4] = metallic;
     data[index + 5] = normal.x;

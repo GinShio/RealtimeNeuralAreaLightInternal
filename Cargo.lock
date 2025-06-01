@@ -2235,26 +2235,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e672c95779cf947c5311f83787af4fa8fffd12fb27e4993211a84bdfd9610f9c"
 
 [[package]]
-name = "train"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ash",
- "bytemuck",
- "clap",
- "exr",
- "glam",
- "gltf",
- "gpu-allocator",
- "half",
- "image",
- "rand 0.9.1",
- "rand_distr",
- "serde_json",
- "walkdir",
-]
-
-[[package]]
 name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

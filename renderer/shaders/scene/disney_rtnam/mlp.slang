@@ -236,12 +236,12 @@ struct Model
                 uniforms.biasOffsets0[0]),
             matrixLayout,
             componentType);
+        transformFrameInput = tanh(transformFrameInput);
         CoopVec<half, 12> transformFrameOutput;
         transformFrameOutput = transformFrameFunc(
             transformFrameInput,
             wi,
             wo);
-        transformFrameOutput = tanh(transformFrameOutput);
 
         // decoder input
         CoopVec<half, 20> decoderInputParams;

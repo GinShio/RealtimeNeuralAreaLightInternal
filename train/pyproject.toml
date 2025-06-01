@@ -6,6 +6,11 @@ requires-python = ">=3.11"
 
 dependencies = [
     "numpy",
+    "tqdm",
+    "OpenEXR",
+    "Imath",
+    "wandb",
+    "python-dotenv",
 ]
 
 [tool.ruff]

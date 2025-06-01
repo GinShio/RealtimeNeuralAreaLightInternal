@@ -2,5 +2,3 @@
 /.direnv
 /result
 imgui.ini
-train_data/*
-!train_data/.gitkeep

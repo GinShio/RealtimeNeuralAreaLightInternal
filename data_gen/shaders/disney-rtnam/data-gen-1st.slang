@@ -23,6 +23,7 @@ struct UniformBuffer
 {
     uint dataSize;
     uint textureSize;
+    uint pixelCount;
 }
 
 [[vk::binding(0)]]
@@ -73,7 +74,7 @@ func sampleWiWo(
         let d = mul(M, delta);
 
         wi = normalize(d);
-        wo = 2.0 * dot(wi, H) * H - wi;
+        wo = normalize(2.0 * dot(wi, H) * H - wi);
 
         if (wo.z >= 0.0 && wi.z >= 0.0)
         {
@@ -103,18 +104,13 @@ func srgbToLinear(color: float3)->float3
     return select(useLinear, v1, v2);
 }
 
-func createTbn(normal: float3)
-    ->float3x3
-{
-    var T = float3(1, 0, 0);
-    var N = normalize(normal);
-    T = normalize(T - dot(T, N) * N);
-    let B = normalize(cross(N, T));
-    return float3x3(T, B, N);
-}
-
 func modifyWi(inout rng: PCG32, wi: float3)->float3
 {
+    if (pc.mollificationScale <= 0.0)
+    {
+        return wi;
+    }
+
     let deg = 10.0 * pc.mollificationScale;
 
     let cosThetaMax = cos(radians(deg));
@@ -127,10 +123,10 @@ func modifyWi(inout rng: PCG32, wi: float3)->float3
         sinTheta * sin(phi),
         cosTheta);
 
-    let TBN = createTbn(wi);
+    let TBN = localToTangent(wi);
 
-    let modifiedWo = mul(TBN, localDir);
-    return normalize(modifiedWo);
+    let modifiedWi = mul(TBN, localDir);
+    return normalize(modifiedWi);
 }
 
 func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
@@ -165,7 +161,7 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
         let roughness = metallicRoughness.g;
         let metallic = metallicRoughness.b;
 
-        let TBN = createTbn(normal);
+        let TBN = localToTangent(normalize(normal));
 
         let wi_modify = modifyWi(rng, wi);
 
@@ -176,17 +172,6 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
 
     brdf /= float(iteration);
     return brdf;
-}
-
-[Differentiable]
-func log1p4(x: float)->float
-{
-    var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    return ret;
 }
 
 [numthreads(64, 1, 1)]
@@ -224,9 +209,9 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // Save training data
     let index = i * 17;
-    data[index + 0] = baseColor.x;
-    data[index + 1] = baseColor.y;
-    data[index + 2] = baseColor.z;
+    data[index + 0] = baseColor.r;
+    data[index + 1] = baseColor.g;
+    data[index + 2] = baseColor.b;
     data[index + 3] = roughness;
     data[index + 4] = metallic;
     data[index + 5] = normal.x;

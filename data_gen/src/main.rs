@@ -16,11 +16,11 @@ struct Args {
     batch_size: u64,
     #[arg(long, default_value_t = 100)]
     first_phase_shard_size: u64,
-    #[arg(long, default_value_t = 1000)]
+    #[arg(long, default_value_t = 100)]
     first_phase_shard_count: u64,
     #[arg(long, default_value_t = 10)]
     second_phase_shard_size: u64,
-    #[arg(long, default_value_t = 1000)]
+    #[arg(long, default_value_t = 100)]
     second_phase_shard_count: u64,
 }
 
@@ -33,12 +33,13 @@ fn main() -> Result<()> {
 
     match args.material.as_str() {
         "disney-rtnam" => {
-            let output_dir = "train_data/disney-rtnam/";
+            let output_dir = "train/data/disney-rtnam/";
             data_gen::disney_rtnam::data_gen(
                 &mut vulkan_state,
                 args.texture_size,
                 args.batch_size,
                 args.first_phase_shard_size,
+                args.first_phase_shard_count / 15,
                 args.first_phase_shard_count,
                 args.second_phase_shard_size,
                 args.second_phase_shard_count,
@@ -50,7 +51,7 @@ fn main() -> Result<()> {
             let metallic_texture_path = "assets/pbr-simple/metallic.png";
             let roughness_texture_path = "assets/pbr-simple/roughness.png";
             let normal_texture_path = "assets/pbr-simple/normal.png";
-            let output_dir = "train_data/pbr-simple/";
+            let output_dir = "train/data/pbr-simple/";
             data_gen::pbr_simple::data_gen(
                 &mut vulkan_state,
                 base_color_texture_path,
@@ -60,6 +61,7 @@ fn main() -> Result<()> {
                 args.texture_size,
                 args.batch_size,
                 args.first_phase_shard_size,
+                args.first_phase_shard_count / 15,
                 args.first_phase_shard_count,
                 args.second_phase_shard_size,
                 args.second_phase_shard_count,
