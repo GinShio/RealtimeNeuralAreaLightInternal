@@ -6,3 +6,6 @@ pub use create_pipeline::*;
 
 mod create_texture;
 pub use create_texture::*;
+
+mod load_glb_texture;
+pub use load_glb_texture::*;

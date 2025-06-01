@@ -8,16 +8,12 @@ import "../rtxns/MLP";
 import "../rtxns/PCG32";
 import "../rtxns/Utils";
 
-import "brdf";
-
-const float PI = 3.14159265358979323846;
+import "disney";
 
 struct UniformBuffer
 {
     uint dataSize;
     uint textureSize;
-    float maxLightSize;
-    float maxLightDistance;
 }
 
 [[vk::binding(0)]]
@@ -30,12 +26,9 @@ RWStructuredBuffer<float> data;
 Sampler2D baseColorSampler;
 
 [[vk::binding(3)]]
-Sampler2D roughnessSampler;
+Sampler2D roughnessMetallicSampler;
 
 [[vk::binding(4)]]
-Sampler2D metallicSampler;
-
-[[vk::binding(5)]]
 Sampler2D normalSampler;
 
 func computeMipCount(width: int)->int
@@ -86,9 +79,10 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
     let normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
+    let roughness = metallicRoughness.g;
+    let metallic = metallicRoughness.b;
 
     // Save training data
     let index = i * 8;

@@ -32,6 +32,19 @@ fn main() -> Result<()> {
     let mut vulkan_state = vulkan_state::VulkanState::new().unwrap();
 
     match args.material.as_str() {
+        "disney-rtnam" => {
+            let output_dir = "train_data/disney-rtnam/";
+            data_gen::disney_rtnam::data_gen(
+                &mut vulkan_state,
+                args.texture_size,
+                args.batch_size,
+                args.first_phase_shard_size,
+                args.first_phase_shard_count,
+                args.second_phase_shard_size,
+                args.second_phase_shard_count,
+                output_dir,
+            )?;
+        }
         "pbr-simple" => {
             let base_color_texture_path = "assets/pbr-simple/baseColor.png";
             let metallic_texture_path = "assets/pbr-simple/metallic.png";

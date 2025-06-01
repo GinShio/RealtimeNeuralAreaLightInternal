@@ -52,6 +52,24 @@ fn main() {
             "main",
         ),
         (
+            "disney-rtnam/data-gen-1st.slang",
+            "disney-rtnam/data-gen-1st.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "disney-rtnam/data-gen-2nd-material.slang",
+            "disney-rtnam/data-gen-2nd-material.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "disney-rtnam/data-gen-2nd.slang",
+            "disney-rtnam/data-gen-2nd.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
             "pbr-simple/data-gen-1st.slang",
             "pbr-simple/data-gen-1st.comp.spv",
             "compute",

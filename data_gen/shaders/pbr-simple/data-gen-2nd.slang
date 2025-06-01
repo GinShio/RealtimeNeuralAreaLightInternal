@@ -152,17 +152,6 @@ func computeDistribution(
     return D / float(ITERATIONS);
 }
 
-[Differentiable]
-func log1p4(x: float)->float
-{
-    var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    return ret;
-}
-
 [numthreads(64, 1, 1)]
 void main(uint3 tid: SV_DispatchThreadID)
 {

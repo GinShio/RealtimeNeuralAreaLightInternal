@@ -9,7 +9,7 @@ use rand::prelude::*;
 use crate::{
     utils::{
         create_compute_pipeline, create_cpu_storage_buffer, create_storage_buffer,
-        create_texture_with_mipmap, create_uniform_buffer,
+        create_uniform_buffer,
     },
     vulkan_state::VulkanState,
 };
@@ -19,8 +19,7 @@ use crate::{
 struct UniformBuffer {
     data_size: u32,
     texture_size: u32,
-    max_light_size: f32,
-    max_light_distance: f32,
+    _padding: [u32; 2],
 }
 
 #[repr(C)]
@@ -40,10 +39,6 @@ struct SecondPhasePushConstants {
 
 pub fn data_gen(
     state: &mut VulkanState,
-    base_color_texture_path: &str,
-    metallic_texture_path: &str,
-    roughness_texture_path: &str,
-    normal_texture_path: &str,
     texture_size: u32,
     batch_size: u64,
     first_phase_shard_size: u64,
@@ -73,18 +68,14 @@ pub fn data_gen(
     file.write_all(config.to_string().as_bytes())
         .expect("Failed to write config JSON");
 
-    let max_light_size = 3.0;
-    let max_light_distance = 10.0;
-
     // base_color (3)
     // roughness (1)
     // metallic (1)
     // normal (3)
+    // wi (3)
     // wo (3)
-    // vertex direction + distance ((3 + 1) * 4)
-    // area (1)
-    // Distribution (3)
-    let first_shard_data_component_size = 31;
+    // BRDF (3)
+    let first_shard_data_component_size = 17;
 
     // base_color (3)
     // roughness (1)
@@ -92,11 +83,10 @@ pub fn data_gen(
     // normal (3)
     let second_material_data_component_size = 8;
 
+    // wi (3)
     // wo (3)
-    // vertex direction + distance ((3 + 1) * 4)
-    // area (1)
-    // Distribution (3)
-    let second_shard_data_component_size = 23;
+    // BRDF (3)
+    let second_shard_data_component_size = 9;
 
     let texture_total_pixel_size = {
         let mut pixel_count = 0;
@@ -116,13 +106,8 @@ pub fn data_gen(
         texture_total_pixel_size * second_phase_shard_size * second_shard_data_component_size;
 
     // === Load textures ===
-    let mut base_color_texture =
-        create_texture_with_mipmap(state, texture_size, base_color_texture_path);
-    let mut metallic_texture =
-        create_texture_with_mipmap(state, texture_size, metallic_texture_path);
-    let mut roughness_texture =
-        create_texture_with_mipmap(state, texture_size, roughness_texture_path);
-    let mut normal_texture = create_texture_with_mipmap(state, texture_size, normal_texture_path);
+    let mut glb_texture =
+        crate::utils::load_glb_texture(state, "assets/DamagedHelmet.glb", texture_size);
 
     // === Initialize sampler, buffers and pipelines ===
 
@@ -215,15 +200,9 @@ pub fn data_gen(
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // metallic metallic texture
-            vk::DescriptorSetLayoutBinding::default()
-                .binding(4)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // normal texture
             vk::DescriptorSetLayoutBinding::default()
-                .binding(5)
+                .binding(4)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
@@ -262,15 +241,9 @@ pub fn data_gen(
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
-            // metallic metallic texture
-            vk::DescriptorSetLayoutBinding::default()
-                .binding(4)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE),
             // normal texture
             vk::DescriptorSetLayoutBinding::default()
-                .binding(5)
+                .binding(4)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::COMPUTE),
@@ -324,7 +297,7 @@ pub fn data_gen(
                 .descriptor_count(1),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(4),
+                .descriptor_count(3),
         ];
         let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
             .pool_sizes(&descriptor_pool_size)
@@ -346,7 +319,7 @@ pub fn data_gen(
                 .descriptor_count(1),
             vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(4),
+                .descriptor_count(3),
         ];
         let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
             .pool_sizes(&descriptor_pool_size)
@@ -430,19 +403,15 @@ pub fn data_gen(
 
         let base_color_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
-            .image_view(base_color_texture.image_view)
+            .image_view(glb_texture.base_color.image_view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
-        let roughness_texture_info = [vk::DescriptorImageInfo::default()
+        let roughness_metallic_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
-            .image_view(roughness_texture.image_view)
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
-        let metallic_texture_info = [vk::DescriptorImageInfo::default()
-            .sampler(sampler)
-            .image_view(metallic_texture.image_view)
+            .image_view(glb_texture.metallic_roughness.image_view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let normal_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
-            .image_view(normal_texture.image_view)
+            .image_view(glb_texture.normal.image_view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
 
         let descriptor_writes = [
@@ -464,22 +433,16 @@ pub fn data_gen(
                 .dst_binding(2)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&base_color_texture_info),
-            // roughness texture
+            // roughness metallic texture
             vk::WriteDescriptorSet::default()
                 .dst_set(first_phase_descriptor_set)
                 .dst_binding(3)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(&roughness_texture_info),
-            // metallic texture
-            vk::WriteDescriptorSet::default()
-                .dst_set(first_phase_descriptor_set)
-                .dst_binding(4)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(&metallic_texture_info),
+                .image_info(&roughness_metallic_texture_info),
             // normal texture
             vk::WriteDescriptorSet::default()
                 .dst_set(first_phase_descriptor_set)
-                .dst_binding(5)
+                .dst_binding(4)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&normal_texture_info),
         ];
@@ -498,19 +461,15 @@ pub fn data_gen(
 
         let base_color_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
-            .image_view(base_color_texture.image_view)
+            .image_view(glb_texture.base_color.image_view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
-        let roughness_texture_info = [vk::DescriptorImageInfo::default()
+        let roughness_metallic_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
-            .image_view(roughness_texture.image_view)
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
-        let metallic_texture_info = [vk::DescriptorImageInfo::default()
-            .sampler(sampler)
-            .image_view(metallic_texture.image_view)
+            .image_view(glb_texture.metallic_roughness.image_view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let normal_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
-            .image_view(normal_texture.image_view)
+            .image_view(glb_texture.normal.image_view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
 
         let descriptor_writes = [
@@ -537,17 +496,11 @@ pub fn data_gen(
                 .dst_set(second_phase_material_descriptor_set)
                 .dst_binding(3)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(&roughness_texture_info),
-            // metallic texture
-            vk::WriteDescriptorSet::default()
-                .dst_set(second_phase_material_descriptor_set)
-                .dst_binding(4)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(&metallic_texture_info),
+                .image_info(&roughness_metallic_texture_info),
             // normal texture
             vk::WriteDescriptorSet::default()
                 .dst_set(second_phase_material_descriptor_set)
-                .dst_binding(5)
+                .dst_binding(4)
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&normal_texture_info),
         ];
@@ -597,7 +550,7 @@ pub fn data_gen(
             state,
             include_bytes!(concat!(
                 env!("OUT_DIR"),
-                "/shaders/pbr-simple/data-gen-1st.comp.spv"
+                "/shaders/disney-rtnam/data-gen-1st.comp.spv"
             )),
             &[first_phase_descriptor_set_layout],
             &first_phase_push_constant_ranges,
@@ -608,7 +561,7 @@ pub fn data_gen(
             state,
             include_bytes!(concat!(
                 env!("OUT_DIR"),
-                "/shaders/pbr-simple/data-gen-2nd-material.comp.spv"
+                "/shaders/disney-rtnam/data-gen-2nd-material.comp.spv"
             )),
             &[second_phase_material_descriptor_set_layout],
             &[],
@@ -619,7 +572,7 @@ pub fn data_gen(
             state,
             include_bytes!(concat!(
                 env!("OUT_DIR"),
-                "/shaders/pbr-simple/data-gen-2nd.comp.spv"
+                "/shaders/disney-rtnam/data-gen-2nd.comp.spv"
             )),
             &[second_phase_descriptor_set_layout],
             &second_phase_push_constant_ranges,
@@ -643,8 +596,7 @@ pub fn data_gen(
     let uniform_data = UniformBuffer {
         data_size: first_phase_shard_size as u32,
         texture_size: texture_size,
-        max_light_size,
-        max_light_distance,
+        _padding: [0; 2],
     };
     uniform_buffer_allocation
         .mapped_slice_mut()
@@ -1030,10 +982,7 @@ pub fn data_gen(
             .device
             .destroy_pipeline_layout(second_phase_pipeline_layout, None);
     }
-    base_color_texture.destroy(state);
-    metallic_texture.destroy(state);
-    roughness_texture.destroy(state);
-    normal_texture.destroy(state);
+    glb_texture.destroy(state);
 
     Ok(())
 }
