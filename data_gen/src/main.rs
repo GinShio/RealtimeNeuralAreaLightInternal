@@ -37,6 +37,7 @@ fn main() -> Result<()> {
             let metallic_texture_path = "assets/pbr-simple/metallic.png";
             let roughness_texture_path = "assets/pbr-simple/roughness.png";
             let normal_texture_path = "assets/pbr-simple/normal.png";
+            let output_dir = "train_data/pbr-simple/";
             data_gen::pbr_simple::data_gen(
                 &mut vulkan_state,
                 base_color_texture_path,
@@ -49,6 +50,7 @@ fn main() -> Result<()> {
                 args.first_phase_shard_count,
                 args.second_phase_shard_size,
                 args.second_phase_shard_count,
+                output_dir,
             )?;
         }
         _ => {

@@ -15,7 +15,6 @@ const float PI = 3.14159265358979323846;
 struct PushConstants
 {
     uint64_t seed;
-    float mollificationScale;
 }
 
 [[push_constant]]
@@ -33,19 +32,10 @@ struct UniformBuffer
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<float> data;
+RWStructuredBuffer<float> materialData;
 
 [[vk::binding(2)]]
-Sampler2D baseColorSampler;
-
-[[vk::binding(3)]]
-Sampler2D roughnessSampler;
-
-[[vk::binding(4)]]
-Sampler2D metallicSampler;
-
-[[vk::binding(5)]]
-Sampler2D normalSampler;
+RWStructuredBuffer<float> data;
 
 func localToTangent(v: float3)->float3x3
 {
@@ -87,40 +77,6 @@ func sampleWiWo(
             return;
         }
     }
-}
-
-func computeMipCount(width: int)->int
-{
-    return int(floor(log2(float(width)))) + 1;
-}
-
-func calculateMipLevelAndUv(index: uint, out mipLevel: float, out uv: float2)
-{
-    var currentMipLevel = 0;
-    var currentMipSize = uniforms.textureSize;
-    var currentPixelOffset = 0;
-    while (currentMipSize > 1)
-    {
-        if (index < currentPixelOffset + currentMipSize * currentMipSize)
-            break;
-
-        currentPixelOffset += currentMipSize * currentMipSize;
-        currentMipSize /= 2;
-        currentMipLevel++;
-    }
-
-    mipLevel = float(currentMipLevel);
-    uv.x = float((index - currentPixelOffset) % currentMipSize) / float(currentMipSize);
-    uv.y = float((index - currentPixelOffset) / currentMipSize) / float(currentMipSize);
-    uv += 0.5 / float(currentMipSize);
-}
-
-func srgbToLinear(color: float3)->float3
-{
-    let useLinear = color <= 0.04045;
-    let v1 = color / 12.92;
-    let v2 = pow((color + 0.055) / 1.055, 2.4);
-    return select(useLinear, v1, v2);
 }
 
 func rotationMatrixFromEuler(euler: float3)->float3x3
@@ -221,16 +177,17 @@ void main(uint3 tid: SV_DispatchThreadID)
     float3 wo;
     sampleWiWo(rng, wi, wo);
 
-    // calculate mip level and uv
-    float mipLevel;
-    float2 uv;
-    calculateMipLevelAndUv(i, mipLevel, uv);
-
     // sample parameters
-    let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
-    let normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
+    let baseColor = float3(
+        materialData[i * 8 + 0],
+        materialData[i * 8 + 1],
+        materialData[i * 8 + 2]);
+    let roughness = materialData[i * 8 + 3];
+    let metallic = materialData[i * 8 + 4];
+    let normal = float3(
+        materialData[i * 8 + 5],
+        materialData[i * 8 + 6],
+        materialData[i * 8 + 7]);
 
     // sample light size
     let width = rng.nextFloat() * uniforms.maxLightSize;
@@ -285,33 +242,28 @@ void main(uint3 tid: SV_DispatchThreadID)
         area);
 
     // Save training data
-    let index = i * 28;
-    data[index + 0] = baseColor.x;
-    data[index + 1] = baseColor.y;
-    data[index + 2] = baseColor.z;
-    data[index + 3] = roughness;
-    data[index + 4] = metallic;
-    data[index + 5] = normal.x;
-    data[index + 6] = normal.y;
-    data[index + 7] = normal.z;
-    data[index + 8] = v1Dir.x;
-    data[index + 9] = v1Dir.y;
-    data[index + 10] = v1Dir.z;
-    data[index + 11] = v1Dist;
-    data[index + 12] = v2Dir.x;
-    data[index + 13] = v2Dir.y;
-    data[index + 14] = v2Dir.z;
-    data[index + 15] = v2Dist;
-    data[index + 16] = v3Dir.x;
-    data[index + 17] = v3Dir.y;
-    data[index + 18] = v3Dir.z;
-    data[index + 19] = v3Dist;
-    data[index + 20] = v4Dir.x;
-    data[index + 21] = v4Dir.y;
-    data[index + 22] = v4Dir.z;
-    data[index + 23] = v4Dist;
-    data[index + 24] = area;
-    data[index + 25] = log1p4(D.x);
-    data[index + 26] = log1p4(D.y);
-    data[index + 27] = log1p4(D.z);
+    let index = i * 23;
+    data[index + 0] = wo.x;
+    data[index + 1] = wo.y;
+    data[index + 2] = wo.z;
+    data[index + 3] = v1Dir.x;
+    data[index + 4] = v1Dir.y;
+    data[index + 5] = v1Dir.z;
+    data[index + 6] = v1Dist;
+    data[index + 7] = v2Dir.x;
+    data[index + 8] = v2Dir.y;
+    data[index + 9] = v2Dir.z;
+    data[index + 10] = v2Dist;
+    data[index + 11] = v3Dir.x;
+    data[index + 12] = v3Dir.y;
+    data[index + 13] = v3Dir.z;
+    data[index + 14] = v3Dist;
+    data[index + 15] = v4Dir.x;
+    data[index + 16] = v4Dir.y;
+    data[index + 17] = v4Dir.z;
+    data[index + 18] = v4Dist;
+    data[index + 19] = area / (uniforms.maxLightSize * uniforms.maxLightSize);
+    data[index + 20] = D.x;
+    data[index + 21] = D.y;
+    data[index + 22] = D.z;
 }

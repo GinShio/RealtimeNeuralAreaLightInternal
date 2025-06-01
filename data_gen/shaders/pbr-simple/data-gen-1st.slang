@@ -303,7 +303,7 @@ void main(uint3 tid: SV_DispatchThreadID)
         area);
 
     // Save training data
-    let index = i * 28;
+    let index = i * 31;
     data[index + 0] = baseColor.x;
     data[index + 1] = baseColor.y;
     data[index + 2] = baseColor.z;
@@ -312,24 +312,27 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 5] = normal.x;
     data[index + 6] = normal.y;
     data[index + 7] = normal.z;
-    data[index + 8] = v1Dir.x;
-    data[index + 9] = v1Dir.y;
-    data[index + 10] = v1Dir.z;
-    data[index + 11] = v1Dist;
-    data[index + 12] = v2Dir.x;
-    data[index + 13] = v2Dir.y;
-    data[index + 14] = v2Dir.z;
-    data[index + 15] = v2Dist;
-    data[index + 16] = v3Dir.x;
-    data[index + 17] = v3Dir.y;
-    data[index + 18] = v3Dir.z;
-    data[index + 19] = v3Dist;
-    data[index + 20] = v4Dir.x;
-    data[index + 21] = v4Dir.y;
-    data[index + 22] = v4Dir.z;
-    data[index + 23] = v4Dist;
-    data[index + 24] = area;
-    data[index + 25] = log1p4(D.x);
-    data[index + 26] = log1p4(D.y);
-    data[index + 27] = log1p4(D.z);
+    data[index + 8] = wo.x;
+    data[index + 9] = wo.y;
+    data[index + 10] = wo.z;
+    data[index + 11] = v1Dir.x;
+    data[index + 12] = v1Dir.y;
+    data[index + 13] = v1Dir.z;
+    data[index + 14] = v1Dist;
+    data[index + 15] = v2Dir.x;
+    data[index + 16] = v2Dir.y;
+    data[index + 17] = v2Dir.z;
+    data[index + 18] = v2Dist;
+    data[index + 19] = v3Dir.x;
+    data[index + 20] = v3Dir.y;
+    data[index + 21] = v3Dir.z;
+    data[index + 22] = v3Dist;
+    data[index + 23] = v4Dir.x;
+    data[index + 24] = v4Dir.y;
+    data[index + 25] = v4Dir.z;
+    data[index + 26] = v4Dist;
+    data[index + 27] = area / (uniforms.maxLightSize * uniforms.maxLightSize);
+    data[index + 28] = D.x;
+    data[index + 29] = D.y;
+    data[index + 30] = D.z;
 }

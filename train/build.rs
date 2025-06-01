@@ -105,6 +105,42 @@ fn main() {
             "compute",
             "main",
         ),
+        (
+            "pbr_simple/init_1st.slang",
+            "pbr_simple/init_1st.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "pbr_simple/train_1st.slang",
+            "pbr_simple/train_1st.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "pbr_simple/adam_1st.slang",
+            "pbr_simple/adam_1st.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "pbr_simple/init_2nd.slang",
+            "pbr_simple/init_2nd.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "pbr_simple/train_2nd.slang",
+            "pbr_simple/train_2nd.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
+            "pbr_simple/adam_2nd.slang",
+            "pbr_simple/adam_2nd.comp.spv",
+            "compute",
+            "main",
+        ),
     ];
 
     // Watch all .slang files in the shader directory

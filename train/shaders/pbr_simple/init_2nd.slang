@@ -1,0 +1,232 @@
+import "../rtxns/Activation";
+import "../rtxns/CooperativeVectorAutoDiff";
+import "../rtxns/CooperativeVectorDerivatives";
+import "../rtxns/CooperativeVectorFunctions";
+import "../rtxns/LinearOps";
+import "../rtxns/Loss";
+import "../rtxns/MLP";
+import "../rtxns/PCG32";
+import "../rtxns/Utils";
+
+using namespace rtxns;
+using namespace rtxns::mlp;
+
+struct PushConstants
+{
+    uint64_t seed;
+    uint currentStep;
+    float learningRate;
+    uint batchIndex;
+}
+
+[[push_constant]]
+PushConstants pc;
+
+struct UniformBuffer
+{
+    uint4 encoderWeightOffsets1;
+    uint4 encoderWeightOffsets2;
+    uint4 encoderBiasOffsets1;
+    uint4 encoderBiasOffsets2;
+
+    uint4 decoderWeightOffsets1;
+    uint4 decoderWeightOffsets2;
+    uint4 decoderBiasOffsets1;
+    uint4 decoderBiasOffsets2;
+
+    uint batchSize;
+    uint latentTexturePixelSize;
+    uint latentTextureParamsSize;
+    uint decoderParamsSize;
+    uint textureSize;
+}
+
+[[vk::binding(0)]]
+uniform ConstantBuffer<UniformBuffer> uniforms;
+
+[[vk::binding(1)]]
+RWStructuredBuffer<float> latentTextureParams;
+
+[[vk::binding(2)]]
+RWStructuredBuffer<float> latentTextureGradients;
+
+[[vk::binding(3)]]
+RWStructuredBuffer<uint> latentTextureStepCount;
+
+[[vk::binding(4)]]
+RWStructuredBuffer<float> latentTextureMoments1;
+
+[[vk::binding(5)]]
+RWStructuredBuffer<float> latentTextureMoments2;
+
+[[vk::binding(6)]]
+RWStructuredBuffer<half> decoderNetworkParams;
+
+[[vk::binding(7)]]
+RWStructuredBuffer<float> decoderNetworkParamsFloat;
+
+[[vk::binding(8)]]
+RWStructuredBuffer<half> decoderGradients;
+
+[[vk::binding(9)]]
+RWStructuredBuffer<float> decoderMoments1;
+
+[[vk::binding(10)]]
+RWStructuredBuffer<float> decoderMoments2;
+
+[[vk::binding(11)]]
+StructuredBuffer<half> encoderNetworkParams;
+
+[[vk::binding(12)]]
+StructuredBuffer<float> materialData;
+
+struct EncoderModel
+{
+    __init(StructuredBuffer<half> encoderMatrixBuffer)
+    {
+        encoderParameters = MatrixBiasBuffer<half>(encoderMatrixBuffer);
+    }
+
+    static func forward_s(
+        no_diff input: CoopVec<half, 8>,
+        encoderParams: MatrixBiasBuffer<half>, )
+        ->CoopVec<half, 8>
+    {
+        let act = rtxns::mlp::ReLUAct<half, 64>();
+        let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
+        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
+        let matrixLayout = CoopVecMatrixLayout::TrainingOptimal;
+        let componentType = CoopVecComponentType::Float16;
+
+        using rtxns::mlp;
+
+        // encoder
+        CoopVec<half, 64> hidden;
+        CoopVec<half, 8> latentVector;
+
+        // encoder 1st layer
+        hidden = LinearOp<half, 64, 8>(
+            input,
+            encoderParams,
+            uint2(
+                uniforms.encoderWeightOffsets1[0],
+                uniforms.encoderBiasOffsets1[0]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // encoder 2nd layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            encoderParams,
+            uint2(
+                uniforms.encoderWeightOffsets1[1],
+                uniforms.encoderBiasOffsets1[1]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // encoder 3rd layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            encoderParams,
+            uint2(
+                uniforms.encoderWeightOffsets1[2],
+                uniforms.encoderBiasOffsets1[2]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // encoder 4th layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            encoderParams,
+            uint2(
+                uniforms.encoderWeightOffsets1[3],
+                uniforms.encoderBiasOffsets1[3]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // encoder 5th layer
+        latentVector = LinearOp<half, 8, 64>(
+            hidden,
+            encoderParams,
+            uint2(
+                uniforms.encoderWeightOffsets2[0],
+                uniforms.encoderBiasOffsets2[0]),
+            matrixLayout,
+            componentType);
+        latentVector = encoderFinalAct.eval(latentVector);
+
+        return latentVector;
+    }
+
+    [mutating]
+    func forward(input: CoopVec<half, 8>)->CoopVec<half, 8>
+    {
+        return forward_s(input, encoderParameters);
+    }
+
+    MatrixBiasBuffer<half> encoderParameters;
+}
+
+func srgbToLinear(color: float3)->float3
+{
+    let useLinear = color <= 0.04045;
+    let v1 = color / 12.92;
+    let v2 = pow((color + 0.055) / 1.055, 2.4);
+    return select(useLinear, v1, v2);
+}
+
+[numthreads(32, 1, 1)]
+void main(uint3 tid: SV_DispatchThreadID)
+{
+    uint i = tid.x;
+    if (i >= uniforms.latentTexturePixelSize + uniforms.decoderParamsSize + uniforms.batchSize)
+        return;
+
+    if (i < uniforms.latentTexturePixelSize)
+    {
+        let baseColor = float3(
+            materialData[i * 8 + 0],
+            materialData[i * 8 + 1],
+            materialData[i * 8 + 2]);
+        let roughness = materialData[i * 8 + 3];
+        let metallic = materialData[i * 8 + 4];
+        let normal = float3(
+            materialData[i * 8 + 5],
+            materialData[i * 8 + 6],
+            materialData[i * 8 + 7]);
+
+        CoopVec<half, 8> input = { baseColor.r, baseColor.g, baseColor.b, roughness, metallic, normal.x, normal.y, normal.z };
+
+        var model = EncoderModel(encoderNetworkParams);
+        CoopVec<half, 8> param = model.forward(input);
+
+        // Init parameters
+        for (uint j = 0; j < 8; j++)
+        {
+            latentTextureParams[i * 8 + j] = float(param[j]);
+            latentTextureMoments1[i * 8 + j] = 0.0f;
+            latentTextureMoments2[i * 8 + j] = 0.0f;
+        }
+    }
+    else if (i < uniforms.latentTexturePixelSize + uniforms.decoderParamsSize)
+    {
+        // Initialize decoder parameters
+        i -= uniforms.latentTexturePixelSize;
+        half param = decoderNetworkParams[i];
+        decoderNetworkParamsFloat[i] = float(param);
+        decoderGradients[i] = half(0.0);
+        decoderMoments1[i] = 0.0f;
+        decoderMoments2[i] = 0.0f;
+    }
+    else
+    {
+        // Initialize latent texture gradients
+        i -= uniforms.latentTexturePixelSize + uniforms.decoderParamsSize;
+        latentTextureGradients[i] = 0.0;
+        latentTextureStepCount[i] = 0;
+    }
+}

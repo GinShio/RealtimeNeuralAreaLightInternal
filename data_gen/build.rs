@@ -58,6 +58,12 @@ fn main() {
             "main",
         ),
         (
+            "pbr-simple/data-gen-2nd-material.slang",
+            "pbr-simple/data-gen-2nd-material.comp.spv",
+            "compute",
+            "main",
+        ),
+        (
             "pbr-simple/data-gen-2nd.slang",
             "pbr-simple/data-gen-2nd.comp.spv",
             "compute",
