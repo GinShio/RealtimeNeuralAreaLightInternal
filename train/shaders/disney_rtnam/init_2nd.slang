@@ -99,7 +99,7 @@ struct EncoderModel
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::SigmoidAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::TrainingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -176,6 +176,14 @@ struct EncoderModel
     MatrixBiasBuffer<half> encoderParameters;
 }
 
+func srgbToLinear(color: float3)->float3
+{
+    let useLinear = color <= 0.04045;
+    let v1 = color / 12.92;
+    let v2 = pow((color + 0.055) / 1.055, 2.4);
+    return select(useLinear, v1, v2);
+}
+
 [numthreads(32, 1, 1)]
 void main(uint3 tid: SV_DispatchThreadID)
 {
@@ -208,21 +216,14 @@ void main(uint3 tid: SV_DispatchThreadID)
         uv += float2(0.5, 0.5) / float(currentMipSize);
 
         // Sample parameters from textures
-        let baseColor = baseColorSampler.SampleLevel(uv, mipLevel);
-        let roughnessMetallic = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
+        let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
+        let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
         let normal = normalSampler.SampleLevel(uv, mipLevel);
+        let roughness = metallicRoughness.g;
+        let metallic = metallicRoughness.b;
 
-        // execute encoder
-        CoopVec<half, 8> input = {
-            half(baseColor.r),
-            half(baseColor.g),
-            half(baseColor.b),
-            half(roughnessMetallic.g),
-            half(roughnessMetallic.b),
-            half(normal.x),
-            half(normal.y),
-            half(normal.z)
-        };
+        CoopVec<half, 8> input = { baseColor.r, baseColor.g, baseColor.b, roughness, metallic, normal.x, normal.y, normal.z };
+
         var model = EncoderModel(encoderNetworkParams);
         CoopVec<half, 8> param = model.forward(input);
 

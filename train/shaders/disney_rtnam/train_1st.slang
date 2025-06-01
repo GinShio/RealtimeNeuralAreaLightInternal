@@ -230,7 +230,7 @@ struct Model
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::SigmoidAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::TrainingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -553,12 +553,9 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
 }
 
 [Differentiable]
-func log1p4(x: float)->float
+func log1p1(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
     ret = log(1.0 + ret);
     return ret;
 }
@@ -569,7 +566,8 @@ func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)-
     var loss = float3(0.0);
     for (var i = 0; i < 3; ++i)
     {
-        let t = log1p4(target[i]);
+        let t = log1p1(target[i]);
+        // let t = target[i];
         let p = predicted[i];
         loss[i] = abs(t - p);
     }
@@ -612,7 +610,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     let actualBrdf = actualBrdfFunc(rng, wi, wo, uv, mipLevel);
 
     // calculate model BRDF
-    let baseColor = baseColorSampler.SampleLevel(uv, mipLevel).rgb;
+    let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
     let metallicRoughness = roughnessMetallicSampler.SampleLevel(uv, mipLevel);
     let normal = normalSampler.SampleLevel(uv, mipLevel);
     let roughness = metallicRoughness.g;
@@ -631,7 +629,7 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // calculate loss
     let scale = LOSS_SCALE / (uniforms.batchSize * 3);
-    let loss = LogL1Loss(actualBrdf, predictedBrdf, scale);
+    let loss = LogL1Loss(actualBrdf, predictedBrdf, scale) * float3(1.0, 1.0, 1.5);
     let lossD = LogL1LossDerivative(actualBrdf, predictedBrdf, scale, loss);
 
     // backward

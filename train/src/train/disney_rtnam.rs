@@ -2071,6 +2071,56 @@ pub fn train(
 
         state.end_single_time_commands(command_buffer);
     }
+
+    let command_buffer = state.begin_single_time_commands();
+
+    // copy params to CPU buffer
+    unsafe {
+        state.device.cmd_copy_buffer(
+            command_buffer,
+            latent_texture_params_buffer,
+            latent_texture_params_cpu_buffer,
+            &[vk::BufferCopy::default()
+                .src_offset(0)
+                .dst_offset(0)
+                .size(latent_texture_total_params_count * std::mem::size_of::<f32>() as u64)],
+        );
+        state.device.cmd_copy_buffer(
+            command_buffer,
+            decoder_network_params_buffer,
+            decoder_network_params_cpu_buffer,
+            &[vk::BufferCopy::default()
+                .src_offset(0)
+                .dst_offset(0)
+                .size(decoder_total_params_count * std::mem::size_of::<half::f16>() as u64)],
+        );
+    }
+
+    state.end_single_time_commands(command_buffer);
+
+    let latent_texture_data = latent_texture_params_cpu_buffer_allocation
+        .mapped_slice()
+        .expect("Failed to allocate CPU buffer for latent texture params");
+    save_mip_image(
+        latent_texture_data,
+        texture_size,
+        "./network/disney-rtnam/pre/",
+    )?;
+
+    let decoder_data = decoder_network_params_cpu_buffer_allocation
+        .mapped_slice()
+        .expect("Failed to map network params CPU buffer")
+        .to_vec();
+
+    let decoder_trained_network = TrainedNetwork::from_data(
+        &state.cooperative_vector_fn,
+        &decoder_data,
+        &decoder_network.weight_offsets,
+        &decoder_network.bias_offsets,
+        &decoder_dimensions,
+    )?;
+    decoder_trained_network.save_network("./network/disney-rtnam/pre/decoder.json")?;
+
     // Create command buffer for training
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
         .command_pool(state.command_pool)
@@ -2306,11 +2356,15 @@ pub fn train(
         }
 
         // Save parameters
-        if (epochs % 100 == 0 || i == epochs - 1) && i > 0 {
+        if (i % 10 == 0 || i == epochs - 1) && i > 0 {
             let latent_texture_data = latent_texture_params_cpu_buffer_allocation
                 .mapped_slice()
                 .expect("Failed to allocate CPU buffer for latent texture params");
-            save_mip_image(latent_texture_data, texture_size, "./network/disney-rtnam/")?;
+            save_mip_image(
+                latent_texture_data,
+                texture_size,
+                format!("./network/disney-rtnam/{i}/"),
+            )?;
 
             let decoder_data = decoder_network_params_cpu_buffer_allocation
                 .mapped_slice()
@@ -2324,7 +2378,8 @@ pub fn train(
                 &decoder_network.bias_offsets,
                 &decoder_dimensions,
             )?;
-            decoder_trained_network.save_network("./network/disney-rtnam/decoder.json")?;
+            decoder_trained_network
+                .save_network(&format!("./network/disney-rtnam/{i}/decoder.json"))?;
         }
     }
 
