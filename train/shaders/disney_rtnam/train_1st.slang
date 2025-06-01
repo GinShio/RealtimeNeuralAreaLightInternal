@@ -285,34 +285,12 @@ struct Model
         hidden = act.eval(hidden);
 
         // encoder 5th layer
-        hidden = LinearOp<half, 64, 64>(
+        latentVector = LinearOp<half, 8, 64>(
             hidden,
             encoderParams,
             uint2(
                 uniforms.encoderWeightOffsets2[0],
                 uniforms.encoderBiasOffsets2[0]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // encoder 6th layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            encoderParams,
-            uint2(
-                uniforms.encoderWeightOffsets2[1],
-                uniforms.encoderBiasOffsets2[1]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // encoder 7th layer
-        latentVector = LinearOp<half, 8, 64>(
-            hidden,
-            encoderParams,
-            uint2(
-                uniforms.encoderWeightOffsets2[2],
-                uniforms.encoderBiasOffsets2[2]),
             matrixLayout,
             componentType);
         latentVector = encoderFinalAct.eval(latentVector);
@@ -381,34 +359,12 @@ struct Model
         hidden = act.eval(hidden);
 
         // decoder 4th layer
-        hidden = LinearOp<half, 64, 64>(
+        output = LinearOp<half, 3, 64>(
             hidden,
             decoderParams,
             uint2(
                 uniforms.decoderWeightOffsets2[0],
                 uniforms.decoderBiasOffsets2[0]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // decoder 5th layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            decoderParams,
-            uint2(
-                uniforms.decoderWeightOffsets2[1],
-                uniforms.decoderBiasOffsets2[1]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // decoder 6th layer
-        output = LinearOp<half, 3, 64>(
-            hidden,
-            decoderParams,
-            uint2(
-                uniforms.decoderWeightOffsets2[2],
-                uniforms.decoderBiasOffsets2[2]),
             matrixLayout,
             componentType);
         output = decoderFinalAct.eval(output);
