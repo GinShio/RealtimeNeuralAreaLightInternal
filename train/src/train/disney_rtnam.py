@@ -517,7 +517,7 @@ def train_second_phase(
     data_dir,
     output_dir,
     num_steps=1000,
-    lr=1e-3,
+    lr=2e-4,
     log_interval=100,
     save_interval=10000,
     device="cuda",
@@ -695,7 +695,7 @@ def train(steps):
     train_second_phase(
         data_dir=data_dir,
         output_dir=output_dir,
-        num_steps=steps // 10,
+        num_steps=steps // 2,
         log_interval=100,
         save_interval=steps // 100,
         device="cuda",

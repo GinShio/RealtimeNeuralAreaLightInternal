@@ -6,6 +6,7 @@
     "BRDF",
     "bytemuck",
     "clippy",
+    "colormap",
     "coopvec",
     "CUDA",
     "cudnn",

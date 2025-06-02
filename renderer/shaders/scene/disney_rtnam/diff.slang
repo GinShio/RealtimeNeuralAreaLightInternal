@@ -10,7 +10,8 @@ import "../../rtxns/MLP";
 import "../../rtxns/PCG32";
 import "../../rtxns/Utils";
 
-import "disney.slang";
+import "disney";
+import "colormap";
 
 using namespace rtxns;
 using namespace rtxns::mlp;
@@ -516,7 +517,9 @@ func fsMain(input: VertexOutput)->FragmentOutput
 
     let diff = LogL1Loss(actualBrdf, mlpOutput, 1.0);
 
+    let delta = magma_colormap(distance(mlpColor, analyticColor));
+
     return {
-        { diff, 1.0 },
+        { delta, 1.0 },
     };
 }
