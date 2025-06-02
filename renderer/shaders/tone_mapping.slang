@@ -3,6 +3,12 @@ Texture2D<float4> inputTexture;
 [[vk::binding(1)]]
 RWTexture2D<float4> outputTexture;
 
+func reinhardToneMapping(color: float3)->float3
+{
+    let mappedColor = color / (color + 1.0);
+    return mappedColor;
+}
+
 func linearToSRGB(color: float3)->float3
 {
     let useLinear = color <= 0.0031308;
@@ -30,7 +36,8 @@ func main(input: ComputeInput)->void
         return;
     }
 
-    let color = inputTexture.Load( { xy, 0 }).rgb;
+    let input = inputTexture.Load( { xy, 0 }).rgb;
+    let color = reinhardToneMapping(input);
     let srgbColor = linearToSRGB(color);
     outputTexture[xy] = { srgbColor, 1.0 };
 }

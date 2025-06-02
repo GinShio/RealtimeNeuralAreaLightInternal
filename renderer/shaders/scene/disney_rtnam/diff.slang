@@ -364,6 +364,20 @@ func LogL1LossDerivative(
     return predictedD.d;
 }
 
+func reinhardToneMapping(color: float3)->float3
+{
+    let mappedColor = color / (color + 1.0);
+    return mappedColor;
+}
+
+func linearToSRGB(color: float3)->float3
+{
+    let useLinear = color <= 0.0031308;
+    let v1 = 12.92 * color;
+    let v2 = 1.055 * pow(color, 1.0 / 2.4) - 0.055;
+    return select(useLinear, v1, v2);
+}
+
 [shader("fragment")]
 func fsMain(input: VertexOutput)->FragmentOutput
 {
@@ -507,7 +521,9 @@ func fsMain(input: VertexOutput)->FragmentOutput
 
     let diff = LogL1Loss(actualBrdf, mlpOutput, 1.0);
 
-    let delta = magma_colormap(distance(mlpColor, analyticColor));
+    let mlpColorTonemap = linearToSRGB(reinhardToneMapping(mlpColor));
+    let analyticColorTonemap = linearToSRGB(reinhardToneMapping(analyticColor));
+    let delta = magma_colormap(distance(mlpColorTonemap, analyticColorTonemap));
 
     return {
         { delta, 1.0 },
