@@ -496,8 +496,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
             let brdf = inverse_log1p4(float3(output[0], output[1], output[2]));
             let lightColor = srgbToLinear(light.color);
             let cosTheta = max(dot(Lt, Nt), 0.0);
-
-            mlpOutput = float3(output[0], output[1], output[2]);
+            mlpOutput = brdf;
             mlpColor += brdf * lightColor * light.intensity * cosTheta;
         }
     }
@@ -515,7 +514,9 @@ func fsMain(input: VertexOutput)->FragmentOutput
         diffColor = float3(0.0, 0.0, diffValue);
     }
 
+    let diff = LogL1Loss(actualBrdf, mlpOutput, 1.0);
+
     return {
-        { diffColor, 1.0 },
+        { diff, 1.0 },
     };
 }
