@@ -326,7 +326,7 @@ class Decoder(nn.Module):
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
-        return self.relu(self.fc5(x))  # (B, 3)
+        return torch.exp(self.fc5(x) - 3.0)  # (B, 3)
 
 
 def write_exr(filename, data):  # data: H x W x C (float16)
@@ -389,6 +389,14 @@ def save_model_as_json(model, path):
         json.dump(model_json, f, indent=2)
 
 
+def log1p4(x):
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    return x
+
+
 def train_first_phase(
     data_dir, output_dir, num_steps=10000, lr=1e-3, log_interval=100, device="cuda"
 ):
@@ -426,7 +434,8 @@ def train_first_phase(
 
         latent = encoder(material)
         pred = decoder(latent, wi, wo)
-        loss = loss_fn(pred, brdf_log)
+        pred_log = log1p4(pred)
+        loss = loss_fn(pred_log, brdf_log)
 
         optimizer.zero_grad()
         loss.backward()
@@ -572,7 +581,8 @@ def train_second_phase(
         latent = latent_texture  # (N, 8)
 
         pred = decoder(latent, wi, wo)  # (N, 3)
-        loss = loss_fn(pred, brdf_log)
+        pred_log = log1p4(pred)
+        loss = loss_fn(pred_log, brdf_log)
 
         optimizer.zero_grad()
         loss.backward()

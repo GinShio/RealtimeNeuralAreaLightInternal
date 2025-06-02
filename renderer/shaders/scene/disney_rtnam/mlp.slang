@@ -214,8 +214,7 @@ struct Model
         ->CoopVec<half, 3>
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
-        let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::ReLUAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::InferencingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -291,7 +290,7 @@ struct Model
                 uniforms.biasOffsets1[0]),
             matrixLayout,
             componentType);
-        output = decoderFinalAct.eval(output);
+        output = decoderFinalAct.eval(output - CoopVec<half, 3>(3.0, 3.0, 3.0));
 
         return output;
     }
@@ -311,13 +310,6 @@ struct Model
     }
 
     MatrixBiasBuffer<half> decoderParameters;
-}
-
-func inverse_log1p(y: float3)->float3
-{
-    float3 ret = y;
-    ret = exp(ret) - 1.0;
-    return ret;
 }
 
 [shader("fragment")]
@@ -363,7 +355,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
             continue;
 
         let output = model.forward(latentVector, normalize(Lt), normalize(Vt));
-        let brdf = inverse_log1p(float3(output[0], output[1], output[2]));
+        let brdf = float3(output[0], output[1], output[2]);
         let lightColor = srgbToLinear(light.color);
         let cosTheta = max(dot(Lt, Nt), 0.0);
         color += brdf * lightColor * light.intensity * cosTheta;

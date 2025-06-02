@@ -98,9 +98,14 @@ func actualBrdfFunc(
     return DisneyBRDF(wi_tangent, wo_tangent, baseColor.rgb, roughness, metallic);
 }
 
-func log1p(float x)->float
+func log1p4(x: float)->float
 {
-    return log(x + 1.0);
+    var ret = x;
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    return ret;
 }
 
 [numthreads(64, 1, 1)]
@@ -148,7 +153,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 3] = half(wo.x);
     data[index + 4] = half(wo.y);
     data[index + 5] = half(wo.z);
-    data[index + 6] = half(log1p(brdf.x));
-    data[index + 7] = half(log1p(brdf.y));
-    data[index + 8] = half(log1p(brdf.z));
+    data[index + 6] = half(log1p4(brdf.x));
+    data[index + 7] = half(log1p4(brdf.y));
+    data[index + 8] = half(log1p4(brdf.z));
 }

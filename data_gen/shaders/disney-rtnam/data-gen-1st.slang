@@ -179,9 +179,14 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
     return brdf;
 }
 
-func log1p(float x)->float
+func log1p4(x: float)->float
 {
-    return log(x + 1.0);
+    var ret = x;
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    return ret;
 }
 
 [numthreads(64, 1, 1)]
@@ -233,7 +238,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 11] = half(wo.x);
     data[index + 12] = half(wo.y);
     data[index + 13] = half(wo.z);
-    data[index + 14] = half(log1p(brdf.x));
-    data[index + 15] = half(log1p(brdf.y));
-    data[index + 16] = half(log1p(brdf.z));
+    data[index + 14] = half(log1p4(brdf.x));
+    data[index + 15] = half(log1p4(brdf.y));
+    data[index + 16] = half(log1p4(brdf.z));
 }
