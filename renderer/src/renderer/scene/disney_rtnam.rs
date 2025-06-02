@@ -750,24 +750,14 @@ impl Scene for DisneyRtnamScene {
                 self.network_weight_offsets[2],
                 self.network_weight_offsets[3],
             ],
-            weight_offsets_1: [
-                self.network_weight_offsets[4],
-                self.network_weight_offsets[5],
-                self.network_weight_offsets[6],
-                self.network_weight_offsets[7],
-            ],
+            weight_offsets_1: [self.network_weight_offsets[4], 0, 0, 0],
             bias_offsets_0: [
                 self.network_bias_offsets[0],
                 self.network_bias_offsets[1],
                 self.network_bias_offsets[2],
                 self.network_bias_offsets[3],
             ],
-            bias_offsets_1: [
-                self.network_bias_offsets[4],
-                self.network_bias_offsets[5],
-                self.network_bias_offsets[6],
-                self.network_bias_offsets[7],
-            ],
+            bias_offsets_1: [self.network_bias_offsets[4], 0, 0, 0],
 
             view: view.to_cols_array(),
             projection: projection.to_cols_array(),
