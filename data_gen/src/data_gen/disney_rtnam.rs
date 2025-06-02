@@ -150,33 +150,33 @@ pub fn data_gen(
     // Create storage buffers
     let (first_phase_data_buffer, first_phase_data_buffer_allocation) = create_storage_buffer(
         state,
-        first_shard_buffer_size * std::mem::size_of::<f32>() as u64,
+        first_shard_buffer_size * std::mem::size_of::<half::f16>() as u64,
     )?;
     let (first_phase_data_cpu_buffer, first_phase_data_cpu_buffer_allocation) =
         create_cpu_storage_buffer(
             state,
-            first_shard_buffer_size * std::mem::size_of::<f32>() as u64,
+            first_shard_buffer_size * std::mem::size_of::<half::f16>() as u64,
         )?;
 
     let (second_phase_material_data_buffer, second_phase_material_data_buffer_allocation) =
         create_storage_buffer(
             state,
-            second_material_buffer_size * std::mem::size_of::<f32>() as u64,
+            second_material_buffer_size * std::mem::size_of::<half::f16>() as u64,
         )?;
     let (second_phase_material_data_cpu_buffer, second_phase_material_data_cpu_buffer_allocation) =
         create_cpu_storage_buffer(
             state,
-            second_material_buffer_size * std::mem::size_of::<f32>() as u64,
+            second_material_buffer_size * std::mem::size_of::<half::f16>() as u64,
         )?;
 
     let (second_phase_data_buffer, second_phase_data_buffer_allocation) = create_storage_buffer(
         state,
-        second_shard_buffer_size * std::mem::size_of::<f32>() as u64,
+        second_shard_buffer_size * std::mem::size_of::<half::f16>() as u64,
     )?;
     let (second_phase_data_cpu_buffer, second_phase_data_cpu_buffer_allocation) =
         create_cpu_storage_buffer(
             state,
-            second_shard_buffer_size * std::mem::size_of::<f32>() as u64,
+            second_shard_buffer_size * std::mem::size_of::<half::f16>() as u64,
         )?;
 
     // Create descriptor layouts
@@ -405,7 +405,7 @@ pub fn data_gen(
         let first_data_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(first_phase_data_buffer)
             .offset(0)
-            .range(first_shard_buffer_size * std::mem::size_of::<f32>() as u64)];
+            .range(first_shard_buffer_size * std::mem::size_of::<half::f16>() as u64)];
 
         let base_color_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
@@ -463,7 +463,7 @@ pub fn data_gen(
         let second_material_data_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(second_phase_material_data_buffer)
             .offset(0)
-            .range(second_material_buffer_size * std::mem::size_of::<f32>() as u64)];
+            .range(second_material_buffer_size * std::mem::size_of::<half::f16>() as u64)];
 
         let base_color_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
@@ -521,11 +521,11 @@ pub fn data_gen(
         let second_data_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(second_phase_data_buffer)
             .offset(0)
-            .range(second_shard_buffer_size * std::mem::size_of::<f32>() as u64)];
+            .range(second_shard_buffer_size * std::mem::size_of::<half::f16>() as u64)];
         let material_data_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(second_phase_material_data_buffer)
             .offset(0)
-            .range(second_material_buffer_size * std::mem::size_of::<f32>() as u64)];
+            .range(second_material_buffer_size * std::mem::size_of::<half::f16>() as u64)];
 
         let descriptor_writes = [
             // uniform buffer
@@ -709,7 +709,7 @@ pub fn data_gen(
                 &[vk::BufferCopy::default()
                     .src_offset(0)
                     .dst_offset(0)
-                    .size(first_shard_buffer_size * std::mem::size_of::<f32>() as u64)],
+                    .size(first_shard_buffer_size * std::mem::size_of::<half::f16>() as u64)],
             );
 
             state.end_single_time_commands(command_buffer);
@@ -811,7 +811,7 @@ pub fn data_gen(
             &[vk::BufferCopy::default()
                 .src_offset(0)
                 .dst_offset(0)
-                .size(second_material_buffer_size * std::mem::size_of::<f32>() as u64)],
+                .size(second_material_buffer_size * std::mem::size_of::<half::f16>() as u64)],
         );
     }
     state.end_single_time_commands(command_buffer);
@@ -933,7 +933,7 @@ pub fn data_gen(
                 &[vk::BufferCopy::default()
                     .src_offset(0)
                     .dst_offset(0)
-                    .size(second_shard_buffer_size * std::mem::size_of::<f32>() as u64)],
+                    .size(second_shard_buffer_size * std::mem::size_of::<half::f16>() as u64)],
             );
 
             state.end_single_time_commands(command_buffer);

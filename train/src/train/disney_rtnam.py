@@ -54,7 +54,7 @@ class MollifiedDataset:
         if self.shard_index < len(self.files):
             path = self.files[self.shard_index]
             def load():
-                self.next_shard = np.fromfile(path, dtype=np.float32).reshape(-1, 17)
+                self.next_shard = np.fromfile(path, dtype=np.float16).reshape(-1, 17)
             self.prefetch_thread = threading.Thread(target=load)
             self.prefetch_thread.start()
 
@@ -69,7 +69,7 @@ class MollifiedDataset:
                 self.current_shard = None
                 return
             path = self.files[self.shard_index]
-            self.current_shard = np.fromfile(path, dtype=np.float32).reshape(-1, 17)
+            self.current_shard = np.fromfile(path, dtype=np.float16).reshape(-1, 17)
 
         self.sample_index = 0
         self.sample_count = 0
@@ -136,7 +136,7 @@ class NormalDataset:
         filepath = self.files[next_index]
 
         def load():
-            self.next_shard = np.fromfile(filepath, dtype=np.float32).reshape(-1, 17)
+            self.next_shard = np.fromfile(filepath, dtype=np.float16).reshape(-1, 17)
 
         self.prefetch_thread = threading.Thread(target=load)
         self.prefetch_thread.start()
@@ -149,7 +149,7 @@ class NormalDataset:
             self.prefetch_thread = None
         else:
             filepath = self.files[self.shard_index]
-            self.current_shard = np.fromfile(filepath, dtype=np.float32).reshape(-1, 17)
+            self.current_shard = np.fromfile(filepath, dtype=np.float16).reshape(-1, 17)
 
         self.sample_index = 0
         self.shard_index = (self.shard_index + 1) % len(self.files)
@@ -218,7 +218,7 @@ class SecondPhaseDataset:
             path = self.shard_paths[self.shard_index]
 
             def load():
-                self.next_shard = np.fromfile(path, dtype=np.float32).reshape(
+                self.next_shard = np.fromfile(path, dtype=np.float16).reshape(
                     -1,
                     self.texture_total_pixel_size,
                     self.second_shard_data_component_size,
@@ -238,7 +238,7 @@ class SecondPhaseDataset:
                 self.current_shard = None
                 return
             path = self.shard_paths[self.shard_index]
-            self.current_shard = np.fromfile(path, dtype=np.float32).reshape(
+            self.current_shard = np.fromfile(path, dtype=np.float16).reshape(
                 -1, self.texture_total_pixel_size, self.second_shard_data_component_size
             )
 

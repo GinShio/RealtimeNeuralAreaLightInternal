@@ -577,6 +577,7 @@ dependencies = [
  "glam",
  "gltf",
  "gpu-allocator",
+ "half",
  "image",
  "rand 0.9.1",
  "rand_distr",

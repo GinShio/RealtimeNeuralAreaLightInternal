@@ -29,10 +29,10 @@ struct UniformBuffer
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<float> data;
+RWStructuredBuffer<half> data;
 
 [[vk::binding(2)]]
-RWStructuredBuffer<float> materialData;
+RWStructuredBuffer<half> materialData;
 
 // rotation from normal to (0, 0, 1)
 func tangentFrame(normal: float3)->float3x3
@@ -137,13 +137,13 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // Save training data
     let index = i * 9;
-    data[index + 0] = wi.x;
-    data[index + 1] = wi.y;
-    data[index + 2] = wi.z;
-    data[index + 3] = wo.x;
-    data[index + 4] = wo.y;
-    data[index + 5] = wo.z;
-    data[index + 6] = brdf.x;
-    data[index + 7] = brdf.y;
-    data[index + 8] = brdf.z;
+    data[index + 0] = half(wi.x);
+    data[index + 1] = half(wi.y);
+    data[index + 2] = half(wi.z);
+    data[index + 3] = half(wo.x);
+    data[index + 4] = half(wo.y);
+    data[index + 5] = half(wo.z);
+    data[index + 6] = half(brdf.x);
+    data[index + 7] = half(brdf.y);
+    data[index + 8] = half(brdf.z);
 }

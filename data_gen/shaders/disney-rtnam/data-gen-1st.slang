@@ -30,7 +30,7 @@ struct UniformBuffer
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<float> data;
+RWStructuredBuffer<half> data;
 
 [[vk::binding(2)]]
 Sampler2D baseColorSampler;
@@ -214,21 +214,21 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // Save training data
     let index = i * 17;
-    data[index + 0] = baseColor.r;
-    data[index + 1] = baseColor.g;
-    data[index + 2] = baseColor.b;
-    data[index + 3] = roughness;
-    data[index + 4] = metallic;
-    data[index + 5] = normal.x;
-    data[index + 6] = normal.y;
-    data[index + 7] = normal.z;
-    data[index + 8] = wi.x;
-    data[index + 9] = wi.y;
-    data[index + 10] = wi.z;
-    data[index + 11] = wo.x;
-    data[index + 12] = wo.y;
-    data[index + 13] = wo.z;
-    data[index + 14] = brdf.x;
-    data[index + 15] = brdf.y;
-    data[index + 16] = brdf.z;
+    data[index + 0] = half(baseColor.r);
+    data[index + 1] = half(baseColor.g);
+    data[index + 2] = half(baseColor.b);
+    data[index + 3] = half(roughness);
+    data[index + 4] = half(metallic);
+    data[index + 5] = half(normal.x);
+    data[index + 6] = half(normal.y);
+    data[index + 7] = half(normal.z);
+    data[index + 8] = half(wi.x);
+    data[index + 9] = half(wi.y);
+    data[index + 10] = half(wi.z);
+    data[index + 11] = half(wo.x);
+    data[index + 12] = half(wo.y);
+    data[index + 13] = half(wo.z);
+    data[index + 14] = half(brdf.x);
+    data[index + 15] = half(brdf.y);
+    data[index + 16] = half(brdf.z);
 }
