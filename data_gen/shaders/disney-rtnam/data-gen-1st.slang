@@ -159,7 +159,8 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
         let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
         let metallicRoughness =
             roughnessMetallicSampler.SampleLevel(uv_modify, mipLevelFloor);
-        let normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
+        var normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
+        normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
         let roughness = metallicRoughness.g;
         let metallic = metallicRoughness.b;
 

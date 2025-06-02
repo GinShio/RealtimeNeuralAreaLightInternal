@@ -391,6 +391,7 @@ func fsMain(input: VertexOutput)->FragmentOutput
     {
         let normalTexture = textures[pc.normalIndex];
         normal = normalTexture.Sample(sampler, input.uv).rgb;
+        normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
     }
     var metallic = 1.0;
     var roughness = 0.1;
