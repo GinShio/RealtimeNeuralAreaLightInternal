@@ -24,6 +24,7 @@ struct UniformBuffer
 {
     uint dataSize;
     uint textureSize;
+    uint pixelCount;
     float maxLightSize;
     float maxLightDistance;
 }
@@ -32,17 +33,18 @@ struct UniformBuffer
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<float> data;
+RWStructuredBuffer<half> data;
 
 [[vk::binding(2)]]
-RWStructuredBuffer<float> materialData;
+RWStructuredBuffer<half> materialData;
 
-func localToTangent(v: float3)->float3x3
+// rotation from normal to (0, 0, 1)
+func tangentFrame(normal: float3)->float3x3
 {
-    let up = abs(v.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
-    let tangent = normalize(cross(up, v));
-    let bitangent = cross(v, tangent);
-    return float3x3(tangent, bitangent, v);
+    let up = abs(normal.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    let tangent = normalize(cross(up, normal));
+    let bitangent = cross(normal, tangent);
+    return float3x3(tangent, bitangent, normal);
 }
 
 func sampleWiWo(
@@ -52,27 +54,29 @@ func sampleWiWo(
 {
     for (var i = 0; i < 10; ++i)
     {
-        let thetaH = acos(sqrt(1.0 - rng.nextFloat()));
+        let zH = rng.nextFloat();
+        let rH = sqrt(1.0 - zH * zH);
         let phiH = 2.0 * PI * rng.nextFloat();
         let H = float3(
-            sin(thetaH) * cos(phiH),
-            sin(thetaH) * sin(phiH),
-            cos(thetaH));
+            rH * cos(phiH),
+            rH * sin(phiH),
+            zH);
 
-        let thetaDelta = acos(sqrt(1.0 - rng.nextFloat()));
+        let zDelta = 2.0 * rng.nextFloat() - 1.0;
+        let rDelta = sqrt(1.0 - zDelta * zDelta);
         let phiDelta = 2.0 * PI * rng.nextFloat();
         let delta = float3(
-            sin(thetaDelta) * cos(phiDelta),
-            sin(thetaDelta) * sin(phiDelta),
-            cos(thetaDelta));
+            rDelta * cos(phiDelta),
+            rDelta * sin(phiDelta),
+            zDelta);
 
-        let M = localToTangent(H);
+        let M = transpose(tangentFrame(H));
         let d = mul(M, delta);
 
         wi = normalize(d);
-        wo = 2.0 * dot(wi, H) * H - wi;
+        wo = normalize(2.0 * dot(wi, H) * H - wi);
 
-        if (wo.z >= 0.0)
+        if (wo.z >= 0.0 && wi.z >= 0.0)
         {
             return;
         }
@@ -121,9 +125,10 @@ func computeDistribution(
     ->float3
 {
     const uint ITERATIONS = 1024;
+
     float3 D = float3(0.0, 0.0, 0.0);
 
-    let N = normal * 2 - 1; 
+    let N = normal * 2 - 1;
 
     let edge1 = v2 - v1;
     let edge2 = v4 - v1;
@@ -169,22 +174,24 @@ void main(uint3 tid: SV_DispatchThreadID)
     sampleWiWo(rng, wi, wo);
 
     // sample parameters
+    let materialBaseIndex = (i % uniforms.pixelCount) * 8;
     let baseColor = float3(
-        materialData[i * 8 + 0],
-        materialData[i * 8 + 1],
-        materialData[i * 8 + 2]);
-    let roughness = materialData[i * 8 + 3];
-    let metallic = materialData[i * 8 + 4];
+        materialData[materialBaseIndex + 0],
+        materialData[materialBaseIndex + 1],
+        materialData[materialBaseIndex + 2]);
+    let roughness = materialData[materialBaseIndex + 3];
+    let metallic = materialData[materialBaseIndex + 4];
     let normal = float3(
-        materialData[i * 8 + 5],
-        materialData[i * 8 + 6],
-        materialData[i * 8 + 7]);
+        materialData[materialBaseIndex + 5],
+        materialData[materialBaseIndex + 6],
+        materialData[materialBaseIndex + 7]);
 
     // sample light size
     let width = rng.nextFloat() * uniforms.maxLightSize;
     let height = rng.nextFloat() * uniforms.maxLightSize;
     let size = float2(width, height);
     let area = width * height;
+    let normalizedArea = area / (uniforms.maxLightSize * uniforms.maxLightSize);
 
     // sample light rotation
     let x = rng.nextFloat() * 2.0 * PI;
@@ -234,27 +241,27 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // Save training data
     let index = i * 23;
-    data[index + 0] = wo.x;
-    data[index + 1] = wo.y;
-    data[index + 2] = wo.z;
-    data[index + 3] = v1Dir.x;
-    data[index + 4] = v1Dir.y;
-    data[index + 5] = v1Dir.z;
-    data[index + 6] = v1Dist;
-    data[index + 7] = v2Dir.x;
-    data[index + 8] = v2Dir.y;
-    data[index + 9] = v2Dir.z;
-    data[index + 10] = v2Dist;
-    data[index + 11] = v3Dir.x;
-    data[index + 12] = v3Dir.y;
-    data[index + 13] = v3Dir.z;
-    data[index + 14] = v3Dist;
-    data[index + 15] = v4Dir.x;
-    data[index + 16] = v4Dir.y;
-    data[index + 17] = v4Dir.z;
-    data[index + 18] = v4Dist;
-    data[index + 19] = area / (uniforms.maxLightSize * uniforms.maxLightSize);
-    data[index + 20] = D.x;
-    data[index + 21] = D.y;
-    data[index + 22] = D.z;
+    data[index + 0] = half(wo.x);
+    data[index + 1] = half(wo.y);
+    data[index + 2] = half(wo.z);
+    data[index + 3] = half(v1Dir.x);
+    data[index + 4] = half(v1Dir.y);
+    data[index + 5] = half(v1Dir.z);
+    data[index + 6] = half(v1Dist);
+    data[index + 7] = half(v2Dir.x);
+    data[index + 8] = half(v2Dir.y);
+    data[index + 9] = half(v2Dir.z);
+    data[index + 10] = half(v2Dist);
+    data[index + 11] = half(v3Dir.x);
+    data[index + 12] = half(v3Dir.y);
+    data[index + 13] = half(v3Dir.z);
+    data[index + 14] = half(v3Dist);
+    data[index + 15] = half(v4Dir.x);
+    data[index + 16] = half(v4Dir.y);
+    data[index + 17] = half(v4Dir.z);
+    data[index + 18] = half(v4Dist);
+    data[index + 19] = half(normalizedArea);
+    data[index + 20] = half(D.x);
+    data[index + 21] = half(D.y);
+    data[index + 22] = half(D.z);
 }

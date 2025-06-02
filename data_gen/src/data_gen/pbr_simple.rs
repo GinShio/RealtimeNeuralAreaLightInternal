@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+use std::thread;
 
 use anyhow::Result;
 use ash::vk;
@@ -20,7 +22,9 @@ struct UniformBuffer {
     data_size: u32,
     texture_size: u32,
     max_light_size: f32,
+    pixel_count: u32,
     max_light_distance: f32,
+    _padding: [u32; 3],
 }
 
 #[repr(C)]
@@ -73,6 +77,10 @@ pub fn data_gen(
     file.write_all(config.to_string().as_bytes())
         .expect("Failed to write config JSON");
 
+    // The number of queues for saving data in other threads.
+    let save_queue_count = 12;
+
+    // Constants
     let max_light_size = 3.0;
     let max_light_distance = 10.0;
 
@@ -159,33 +167,33 @@ pub fn data_gen(
     // Create storage buffers
     let (first_phase_data_buffer, first_phase_data_buffer_allocation) = create_storage_buffer(
         state,
-        first_shard_buffer_size * std::mem::size_of::<f32>() as u64,
+        first_shard_buffer_size * std::mem::size_of::<half::f16>() as u64,
     )?;
     let (first_phase_data_cpu_buffer, first_phase_data_cpu_buffer_allocation) =
         create_cpu_storage_buffer(
             state,
-            first_shard_buffer_size * std::mem::size_of::<f32>() as u64,
+            first_shard_buffer_size * std::mem::size_of::<half::f16>() as u64,
         )?;
 
     let (second_phase_material_data_buffer, second_phase_material_data_buffer_allocation) =
         create_storage_buffer(
             state,
-            second_material_buffer_size * std::mem::size_of::<f32>() as u64,
+            second_material_buffer_size * std::mem::size_of::<half::f16>() as u64,
         )?;
     let (second_phase_material_data_cpu_buffer, second_phase_material_data_cpu_buffer_allocation) =
         create_cpu_storage_buffer(
             state,
-            second_material_buffer_size * std::mem::size_of::<f32>() as u64,
+            second_material_buffer_size * std::mem::size_of::<half::f16>() as u64,
         )?;
 
     let (second_phase_data_buffer, second_phase_data_buffer_allocation) = create_storage_buffer(
         state,
-        second_shard_buffer_size * std::mem::size_of::<f32>() as u64,
+        second_shard_buffer_size * std::mem::size_of::<half::f16>() as u64,
     )?;
     let (second_phase_data_cpu_buffer, second_phase_data_cpu_buffer_allocation) =
         create_cpu_storage_buffer(
             state,
-            second_shard_buffer_size * std::mem::size_of::<f32>() as u64,
+            second_shard_buffer_size * std::mem::size_of::<half::f16>() as u64,
         )?;
 
     // Create descriptor layouts
@@ -426,7 +434,7 @@ pub fn data_gen(
         let first_data_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(first_phase_data_buffer)
             .offset(0)
-            .range(first_shard_buffer_size * std::mem::size_of::<f32>() as u64)];
+            .range(first_shard_buffer_size * std::mem::size_of::<half::f16>() as u64)];
 
         let base_color_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
@@ -494,7 +502,7 @@ pub fn data_gen(
         let second_material_data_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(second_phase_material_data_buffer)
             .offset(0)
-            .range(second_material_buffer_size * std::mem::size_of::<f32>() as u64)];
+            .range(second_material_buffer_size * std::mem::size_of::<half::f16>() as u64)];
 
         let base_color_texture_info = [vk::DescriptorImageInfo::default()
             .sampler(sampler)
@@ -562,11 +570,11 @@ pub fn data_gen(
         let second_data_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(second_phase_data_buffer)
             .offset(0)
-            .range(second_shard_buffer_size * std::mem::size_of::<f32>() as u64)];
+            .range(second_shard_buffer_size * std::mem::size_of::<half::f16>() as u64)];
         let material_data_buffer_info = [vk::DescriptorBufferInfo::default()
             .buffer(second_phase_material_data_buffer)
             .offset(0)
-            .range(second_material_buffer_size * std::mem::size_of::<f32>() as u64)];
+            .range(second_material_buffer_size * std::mem::size_of::<half::f16>() as u64)];
 
         let descriptor_writes = [
             // uniform buffer
@@ -643,15 +651,43 @@ pub fn data_gen(
     let first_start = std::time::Instant::now();
 
     let uniform_data = UniformBuffer {
-        data_size: (batch_size * first_phase_shard_size) as u32,
+        data_size: (first_shard_buffer_size / first_shard_data_component_size) as u32,
         texture_size: texture_size,
+        pixel_count: texture_total_pixel_size as u32,
         max_light_size,
         max_light_distance,
+        _padding: [0; 3],
     };
     uniform_buffer_allocation
         .mapped_slice_mut()
         .expect("Failed to map uniform buffer")[0..std::mem::size_of::<UniformBuffer>()]
         .copy_from_slice(bytemuck::bytes_of(&uniform_data));
+
+    let (tx, rx): (SyncSender<(u64, Vec<u8>)>, Receiver<(u64, Vec<u8>)>) =
+        sync_channel(save_queue_count);
+    let save_handle = thread::spawn({
+        let output_dir = output_dir.to_owned();
+        move || {
+            while let Ok((i, data)) = rx.recv() {
+                let mut file = File::create(output_dir.join(format!(
+                    "first_phase_data{}.shard-{}.bin",
+                    if i < mollification_shard_count {
+                        "-mollified"
+                    } else {
+                        ""
+                    },
+                    if i < mollification_shard_count {
+                        i
+                    } else {
+                        i - mollification_shard_count
+                    }
+                )))
+                .unwrap();
+                file.write_all(&data)
+                    .expect("Failed to write first phase data shard");
+            }
+        }
+    });
 
     for i in 0..(mollification_shard_count + first_phase_shard_count) {
         let step_start = std::time::Instant::now();
@@ -659,7 +695,7 @@ pub fn data_gen(
         let seed: u64 = rng.random();
 
         let mollification_scale = if i < mollification_shard_count {
-            i as f32 / mollification_shard_count as f32
+            1.0 - i as f32 / mollification_shard_count as f32
         } else {
             0.0
         };
@@ -694,7 +730,7 @@ pub fn data_gen(
             );
             state.device.cmd_dispatch(
                 command_buffer,
-                (batch_size * first_phase_shard_size).div_ceil(64) as u32,
+                (first_shard_buffer_size / first_shard_data_component_size).div_ceil(64) as u32,
                 1,
                 1,
             );
@@ -724,7 +760,7 @@ pub fn data_gen(
                 &[vk::BufferCopy::default()
                     .src_offset(0)
                     .dst_offset(0)
-                    .size(first_phase_shard_size * std::mem::size_of::<f32>() as u64)],
+                    .size(first_shard_buffer_size * std::mem::size_of::<half::f16>() as u64)],
             );
 
             state.end_single_time_commands(command_buffer);
@@ -732,24 +768,11 @@ pub fn data_gen(
 
         // save shard data
         {
-            let data_slice = first_phase_data_cpu_buffer_allocation
+            let data = first_phase_data_cpu_buffer_allocation
                 .mapped_slice()
-                .expect("Failed to map first phase data buffer");
-            let mut file = File::create(output_dir.join(format!(
-                "first_phase_data{}.shard-{}.bin",
-                if i < mollification_shard_count {
-                    "-mollified"
-                } else {
-                    ""
-                },
-                if i < mollification_shard_count {
-                    i
-                } else {
-                    i - mollification_shard_count
-                }
-            )))?;
-            file.write_all(data_slice)
-                .expect("Failed to write first phase data shard");
+                .expect("Failed to map first phase data buffer")
+                .to_vec();
+            tx.send((i, data)).unwrap();
         }
 
         let elapsed = step_start.elapsed();
@@ -762,6 +785,8 @@ pub fn data_gen(
         );
         std::io::stdout().flush().expect("Failed to flush stdout");
     }
+    drop(tx);
+    save_handle.join().unwrap();
 
     let elapsed = first_start.elapsed();
     let minutes = elapsed.as_secs() / 60;
@@ -782,10 +807,12 @@ pub fn data_gen(
     let second_material_start = std::time::Instant::now();
 
     let uniform_data = UniformBuffer {
-        data_size: texture_total_pixel_size as u32,
+        data_size: (second_material_buffer_size / second_material_data_component_size) as u32,
         texture_size: texture_size,
+        pixel_count: texture_total_pixel_size as u32,
         max_light_size,
         max_light_distance,
+        _padding: [0; 3],
     };
     uniform_buffer_allocation
         .mapped_slice_mut()
@@ -809,7 +836,7 @@ pub fn data_gen(
         );
         state.device.cmd_dispatch(
             command_buffer,
-            texture_total_pixel_size.div_ceil(64) as u32,
+            (second_material_buffer_size / second_material_data_component_size).div_ceil(64) as u32,
             1,
             1,
         );
@@ -837,7 +864,7 @@ pub fn data_gen(
             &[vk::BufferCopy::default()
                 .src_offset(0)
                 .dst_offset(0)
-                .size(second_phase_shard_size * std::mem::size_of::<f32>() as u64)],
+                .size(second_material_buffer_size * std::mem::size_of::<half::f16>() as u64)],
         );
     }
     state.end_single_time_commands(command_buffer);
@@ -871,15 +898,32 @@ pub fn data_gen(
     let second_start = std::time::Instant::now();
 
     let uniform_data = UniformBuffer {
-        data_size: (texture_total_pixel_size * second_phase_shard_size) as u32,
+        data_size: (second_shard_buffer_size / second_shard_data_component_size) as u32,
         texture_size: texture_size,
+        pixel_count: texture_total_pixel_size as u32,
         max_light_size,
         max_light_distance,
+        _padding: [0; 3],
     };
     uniform_buffer_allocation
         .mapped_slice_mut()
         .expect("Failed to map uniform buffer")[0..std::mem::size_of::<UniformBuffer>()]
         .copy_from_slice(bytemuck::bytes_of(&uniform_data));
+
+    let (tx, rx): (SyncSender<(u64, Vec<u8>)>, Receiver<(u64, Vec<u8>)>) =
+        sync_channel(save_queue_count);
+    let save_handle = thread::spawn({
+        let output_dir = output_dir.to_owned();
+        move || {
+            while let Ok((i, data)) = rx.recv() {
+                let mut file =
+                    File::create(output_dir.join(format!("second_phase_data.shard-{}.bin", i)))
+                        .unwrap();
+                file.write_all(&data)
+                    .expect("Failed to write first phase data shard");
+            }
+        }
+    });
 
     for i in 0..second_phase_shard_count {
         let step_start = std::time::Instant::now();
@@ -916,7 +960,7 @@ pub fn data_gen(
             );
             state.device.cmd_dispatch(
                 command_buffer,
-                (texture_total_pixel_size * second_phase_shard_size).div_ceil(64) as u32,
+                (second_shard_buffer_size / second_shard_data_component_size).div_ceil(64) as u32,
                 1,
                 1,
             );
@@ -944,7 +988,7 @@ pub fn data_gen(
                 &[vk::BufferCopy::default()
                     .src_offset(0)
                     .dst_offset(0)
-                    .size(second_shard_buffer_size * std::mem::size_of::<f32>() as u64)],
+                    .size(second_shard_buffer_size * std::mem::size_of::<half::f16>() as u64)],
             );
 
             state.end_single_time_commands(command_buffer);
@@ -952,13 +996,11 @@ pub fn data_gen(
 
         // save shard data
         {
-            let data_slice = first_phase_data_cpu_buffer_allocation
+            let data = second_phase_data_cpu_buffer_allocation
                 .mapped_slice()
-                .expect("Failed to map second phase data buffer");
-            let mut file =
-                File::create(output_dir.join(format!("second_phase_data.shard-{}.bin", i)))?;
-            file.write_all(data_slice)
-                .expect("Failed to write first phase data shard");
+                .expect("Failed to map second phase data buffer")
+                .to_vec();
+            tx.send((i, data)).unwrap();
         }
 
         let elapsed = step_start.elapsed();
@@ -971,6 +1013,8 @@ pub fn data_gen(
         );
         std::io::stdout().flush().expect("Failed to flush stdout");
     }
+    drop(tx);
+    save_handle.join().unwrap();
 
     let elapsed = second_start.elapsed();
     let minutes = elapsed.as_secs() / 60;

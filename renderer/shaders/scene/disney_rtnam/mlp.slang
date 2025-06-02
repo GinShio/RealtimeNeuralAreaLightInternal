@@ -282,13 +282,46 @@ struct Model
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 4th layer
-        output = LinearOp<half, 3, 64>(
+        // decoder 4rd layer
+        hidden = LinearOp<half, 64, 64>(
             hidden,
             decoderParams,
             uint2(
                 uniforms.weightOffsets1[0],
                 uniforms.biasOffsets1[0]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 5rd layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            decoderParams,
+            uint2(
+                uniforms.weightOffsets1[1],
+                uniforms.biasOffsets1[1]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 6rd layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            decoderParams,
+            uint2(
+                uniforms.weightOffsets1[2],
+                uniforms.biasOffsets1[2]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 7th layer
+        output = LinearOp<half, 3, 64>(
+            hidden,
+            decoderParams,
+            uint2(
+                uniforms.weightOffsets1[3],
+                uniforms.biasOffsets1[3]),
             matrixLayout,
             componentType);
         output = decoderFinalAct.eval(output);

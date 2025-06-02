@@ -298,13 +298,46 @@ struct Model
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 4th layer
-        output = LinearOp<half, 3, 64>(
+        // decoder 4rd layer
+        hidden = LinearOp<half, 64, 64>(
             hidden,
             decoderParams,
             uint2(
                 uniforms.weightOffsets1[0],
                 uniforms.biasOffsets1[0]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 5rd layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            decoderParams,
+            uint2(
+                uniforms.weightOffsets1[1],
+                uniforms.biasOffsets1[1]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 6rd layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            decoderParams,
+            uint2(
+                uniforms.weightOffsets1[2],
+                uniforms.biasOffsets1[2]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 7th layer
+        output = LinearOp<half, 3, 64>(
+            hidden,
+            decoderParams,
+            uint2(
+                uniforms.weightOffsets1[3],
+                uniforms.biasOffsets1[3]),
             matrixLayout,
             componentType);
         output = decoderFinalAct.eval(output);
@@ -498,7 +531,6 @@ func fsMain(input: VertexOutput)->FragmentOutput
             let brdf = inverse_log1p4(float3(output[0], output[1], output[2]));
             let lightColor = srgbToLinear(light.color);
             let cosTheta = max(dot(Lt, Nt), 0.0);
-            mlpOutput = brdf;
             mlpColor += brdf * lightColor * light.intensity * cosTheta;
         }
     }

@@ -25,6 +25,7 @@ struct UniformBuffer
 {
     uint dataSize;
     uint textureSize;
+    uint pixelCount;
     float maxLightSize;
     float maxLightDistance;
 }
@@ -33,7 +34,7 @@ struct UniformBuffer
 uniform ConstantBuffer<UniformBuffer> uniforms;
 
 [[vk::binding(1)]]
-RWStructuredBuffer<float> data;
+RWStructuredBuffer<half> data;
 
 [[vk::binding(2)]]
 Sampler2D baseColorSampler;
@@ -47,12 +48,13 @@ Sampler2D metallicSampler;
 [[vk::binding(5)]]
 Sampler2D normalSampler;
 
-func localToTangent(v: float3)->float3x3
+// rotation from normal to (0, 0, 1)
+func tangentFrame(normal: float3)->float3x3
 {
-    let up = abs(v.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
-    let tangent = normalize(cross(up, v));
-    let bitangent = cross(v, tangent);
-    return float3x3(tangent, bitangent, v);
+    let up = abs(normal.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    let tangent = normalize(cross(up, normal));
+    let bitangent = cross(normal, tangent);
+    return float3x3(tangent, bitangent, normal);
 }
 
 func sampleWiWo(
@@ -62,27 +64,29 @@ func sampleWiWo(
 {
     for (var i = 0; i < 10; ++i)
     {
-        let thetaH = acos(sqrt(1.0 - rng.nextFloat()));
+        let zH = rng.nextFloat();
+        let rH = sqrt(1.0 - zH * zH);
         let phiH = 2.0 * PI * rng.nextFloat();
         let H = float3(
-            sin(thetaH) * cos(phiH),
-            sin(thetaH) * sin(phiH),
-            cos(thetaH));
+            rH * cos(phiH),
+            rH * sin(phiH),
+            zH);
 
-        let thetaDelta = acos(sqrt(1.0 - rng.nextFloat()));
+        let zDelta = 2.0 * rng.nextFloat() - 1.0;
+        let rDelta = sqrt(1.0 - zDelta * zDelta);
         let phiDelta = 2.0 * PI * rng.nextFloat();
         let delta = float3(
-            sin(thetaDelta) * cos(phiDelta),
-            sin(thetaDelta) * sin(phiDelta),
-            cos(thetaDelta));
+            rDelta * cos(phiDelta),
+            rDelta * sin(phiDelta),
+            zDelta);
 
-        let M = localToTangent(H);
+        let M = transpose(tangentFrame(H));
         let d = mul(M, delta);
 
         wi = normalize(d);
-        wo = 2.0 * dot(wi, H) * H - wi;
+        wo = normalize(2.0 * dot(wi, H) * H - wi);
 
-        if (wo.z >= 0.0)
+        if (wo.z >= 0.0 && wi.z >= 0.0)
         {
             return;
         }
@@ -137,23 +141,17 @@ func rotationMatrixFromEuler(euler: float3)->float3x3
     return mul(rotY, mul(rotX, rotZ));
 }
 
-func createTbn(normal: float3)
-    ->float3x3
-{
-    var T = float3(1, 0, 0);
-    var N = normalize(normal);
-    T = normalize(T - dot(T, N) * N);
-    let B = normalize(cross(N, T));
-    return float3x3(T, B, N);
-}
-
 func modifyWi(inout rng: PCG32, wi: float3)->float3
 {
-    let deg = 10.0 * pc.mollificationScale;
+    if (pc.mollificationScale <= 0.0)
+    {
+        return wi;
+    }
 
+    let deg = 10.0 * pc.mollificationScale;
     let cosThetaMax = cos(radians(deg));
 
-    let cosTheta = lerp(cosThetaMax, 1.0, rng.nextFloat());
+    let cosTheta = 1.0 - rng.nextFloat() * (1.0 - cosThetaMax);
     let sinTheta = sqrt(1.0 - cosTheta * cosTheta);
     let phi = 2.0 * PI * rng.nextFloat();
     let localDir = float3(
@@ -161,27 +159,42 @@ func modifyWi(inout rng: PCG32, wi: float3)->float3
         sinTheta * sin(phi),
         cosTheta);
 
-    let TBN = createTbn(wi);
+    let TBN = transpose(tangentFrame(wi));
+    let modifiedWi = mul(TBN, localDir);
 
-    let modifiedWo = mul(TBN, localDir);
-    return normalize(modifiedWo);
+    return normalize(modifiedWi);
+}
+
+func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
+{
+    let levelWidth = uniforms.textureSize / exp2(mipLevel);
+    let pixelSize = 1.0 / levelWidth;
+    let sigma = 0.5 * 0.5 * pixelSize;
+
+    // Box-Muller method for generating Gaussian noise
+    let r = sqrt(-2.0 * log(max(rng.nextFloat(), 1e-6)));
+    let theta = 2.0 * PI * rng.nextFloat();
+    let offset = sigma * r * float2(cos(theta), sin(theta));
+
+    return uv + offset;
 }
 
 func computeDistribution(
     inout rng: PCG32,
-    baseColor: float3,
-    roughness: float,
-    metallic: float,
-    normal: float3,
+    uv: float2,
     wo: float3,
     v1: float3,
     v2: float3,
     v3: float3,
     v4: float3,
-    area: float)
+    area: float,
+    mipLevel: float)
     ->float3
 {
     const uint ITERATIONS = 1024;
+
+    let mipLevelFloor = floor(mipLevel);
+
     float3 D = float3(0.0, 0.0, 0.0);
 
     let edge1 = v2 - v1;
@@ -191,6 +204,14 @@ func computeDistribution(
 
     for (uint i = 0; i < ITERATIONS; ++i)
     {
+        let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
+
+        let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
+        let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        let metallic = metallicSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        var normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
+        normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
+
         let u = rng.nextFloat();
         let v = rng.nextFloat();
 
@@ -203,27 +224,16 @@ func computeDistribution(
         let distanceSquared = dot(lightPos, lightPos);
         let G = (NdotL * LnDotWi) / (distanceSquared + 1e-5);
 
-        let wo_modify = modifyWi(rng, wo);
+        let wi_modify = modifyWi(rng, wi);
 
         if (G > 0.0)
         {
-            let brdf = PbrBRDF(baseColor, roughness, metallic, normal, wo_modify, wi);
+            let brdf = PbrBRDF(srgbToLinear(baseColor.rgb), roughness, metallic, normal, wo, wi_modify);
             D += brdf * G * area;
         }
     }
 
     return D / float(ITERATIONS);
-}
-
-[Differentiable]
-func log1p4(x: float)->float
-{
-    var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    return ret;
 }
 
 [numthreads(64, 1, 1)]
@@ -255,6 +265,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     let height = rng.nextFloat() * uniforms.maxLightSize;
     let size = float2(width, height);
     let area = width * height;
+    let normalizedArea = area / (uniforms.maxLightSize * uniforms.maxLightSize);
 
     // sample light rotation
     let x = rng.nextFloat() * 2.0 * PI;
@@ -294,45 +305,43 @@ void main(uint3 tid: SV_DispatchThreadID)
     // compute D
     let D = computeDistribution(
         rng,
-        baseColor,
-        roughness,
-        metallic,
-        normal,
+        uv,
         wo,
         v1, v2, v3, v4,
-        area);
+        area,
+        mipLevel);
 
     // Save training data
     let index = i * 31;
-    data[index + 0] = baseColor.x;
-    data[index + 1] = baseColor.y;
-    data[index + 2] = baseColor.z;
-    data[index + 3] = roughness;
-    data[index + 4] = metallic;
-    data[index + 5] = normal.x;
-    data[index + 6] = normal.y;
-    data[index + 7] = normal.z;
-    data[index + 8] = wo.x;
-    data[index + 9] = wo.y;
-    data[index + 10] = wo.z;
-    data[index + 11] = v1Dir.x;
-    data[index + 12] = v1Dir.y;
-    data[index + 13] = v1Dir.z;
-    data[index + 14] = v1Dist;
-    data[index + 15] = v2Dir.x;
-    data[index + 16] = v2Dir.y;
-    data[index + 17] = v2Dir.z;
-    data[index + 18] = v2Dist;
-    data[index + 19] = v3Dir.x;
-    data[index + 20] = v3Dir.y;
-    data[index + 21] = v3Dir.z;
-    data[index + 22] = v3Dist;
-    data[index + 23] = v4Dir.x;
-    data[index + 24] = v4Dir.y;
-    data[index + 25] = v4Dir.z;
-    data[index + 26] = v4Dist;
-    data[index + 27] = area / (uniforms.maxLightSize * uniforms.maxLightSize);
-    data[index + 28] = D.x;
-    data[index + 29] = D.y;
-    data[index + 30] = D.z;
+    data[index + 0] = half(baseColor.x);
+    data[index + 1] = half(baseColor.y);
+    data[index + 2] = half(baseColor.z);
+    data[index + 3] = half(roughness);
+    data[index + 4] = half(metallic);
+    data[index + 5] = half(normal.x);
+    data[index + 6] = half(normal.y);
+    data[index + 7] = half(normal.z);
+    data[index + 8] = half(wo.x);
+    data[index + 9] = half(wo.y);
+    data[index + 10] = half(wo.z);
+    data[index + 11] = half(v1Dir.x);
+    data[index + 12] = half(v1Dir.y);
+    data[index + 13] = half(v1Dir.z);
+    data[index + 14] = half(v1Dist);
+    data[index + 15] = half(v2Dir.x);
+    data[index + 16] = half(v2Dir.y);
+    data[index + 17] = half(v2Dir.z);
+    data[index + 18] = half(v2Dist);
+    data[index + 19] = half(v3Dir.x);
+    data[index + 20] = half(v3Dir.y);
+    data[index + 21] = half(v3Dir.z);
+    data[index + 22] = half(v3Dist);
+    data[index + 23] = half(v4Dir.x);
+    data[index + 24] = half(v4Dir.y);
+    data[index + 25] = half(v4Dir.z);
+    data[index + 26] = half(v4Dist);
+    data[index + 27] = half(normalizedArea);
+    data[index + 28] = half(D.x);
+    data[index + 29] = half(D.y);
+    data[index + 30] = half(D.z);
 }
