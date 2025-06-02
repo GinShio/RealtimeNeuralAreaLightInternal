@@ -258,7 +258,8 @@ void main(uint3 tid: SV_DispatchThreadID)
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
     let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
     let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
-    let normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
+    var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
+    normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 
     // sample light size
     let width = rng.nextFloat() * uniforms.maxLightSize;
