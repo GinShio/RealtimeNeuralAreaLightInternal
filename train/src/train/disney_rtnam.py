@@ -404,6 +404,9 @@ def train_first_phase(
     optimizer = torch.optim.Adam(
         list(encoder.parameters()) + list(decoder.parameters()), lr=lr
     )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=num_steps, eta_min= lr / 10
+    )
     loss_fn = nn.L1Loss()
 
     # mollified_data = MollifiedDataset(data_dir, num_steps=num_steps // 15)
@@ -437,6 +440,7 @@ def train_first_phase(
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         if step % log_interval == 0 or step == num_steps - 1:
             # Log to Weights & Biases
@@ -688,9 +692,8 @@ def train(steps):
         data_dir=data_dir,
         output_dir=output_dir,
         num_steps=steps // 10,
-        lr=1e-3,
         log_interval=100,
-        save_interval=steps // 10,
+        save_interval=steps // 100,
         device="cuda",
     )
 

@@ -344,7 +344,7 @@ impl DisneyRtnamScene {
         // Load network data
         let network = Network::from_json(
             &state.cooperative_vector_fn,
-            "./network/disney-rtnam/pre/network.json",
+            "./network/disney-rtnam/network.json",
         )?;
         let (network_buffer, network_buffer_allocation) = {
             let buffer_size = network.data.len() as u64;
@@ -494,9 +494,9 @@ impl DisneyRtnamScene {
         };
 
         let latent_texture_0 = texture_manager
-            .load_latent_texture(state, "network/disney-rtnam/pre/latent-texture-0.exr")?;
+            .load_latent_texture(state, "network/disney-rtnam/latent-texture-0.exr")?;
         let latent_texture_1 = texture_manager
-            .load_latent_texture(state, "network/disney-rtnam/pre/latent-texture-1.exr")?;
+            .load_latent_texture(state, "network/disney-rtnam/latent-texture-1.exr")?;
 
         Ok(Box::new(Self {
             uniform_buffers,

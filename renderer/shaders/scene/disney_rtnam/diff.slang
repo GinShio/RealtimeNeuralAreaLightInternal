@@ -515,10 +515,6 @@ func fsMain(input: VertexOutput)->FragmentOutput
         diffColor = float3(0.0, 0.0, diffValue);
     }
 
-    // let scale = 10.0;
-    // let loss = LogL1Loss(actualBrdf, mlpOutput, scale);
-    // let lossD = LogL1LossDerivative(actualBrdf, mlpOutput, scale, loss);
-
     return {
         { diffColor, 1.0 },
     };
