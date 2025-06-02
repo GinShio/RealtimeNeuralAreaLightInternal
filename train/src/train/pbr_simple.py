@@ -445,8 +445,7 @@ def train_first_phase(
     )
     loss_fn = nn.L1Loss()
 
-    # mollified_data = MollifiedDataset(data_dir, num_steps=num_steps // 15)
-    mollified_data = MollifiedDataset(data_dir, num_steps=num_steps)
+    mollified_data = MollifiedDataset(data_dir, num_steps=num_steps // 15)
     normal_data = NormalDataset(data_dir)
 
     data = iter(mollified_data)
@@ -512,7 +511,7 @@ def generate_latent_texture(data_dir, output_dir, device="cuda"):
         width //= 2
 
     material_path = os.path.join(data_dir, "second_phase_data.material.bin")
-    material_data = np.fromfile(material_path, dtype=np.float32).reshape(
+    material_data = np.fromfile(material_path, dtype=np.float16).reshape(
         texture_total_pixel_size, 8
     )
     material_tensor = torch.tensor(material_data, dtype=torch.float32).to(device)
@@ -712,10 +711,10 @@ def format_duration(seconds: float) -> str:
     return f"{hours}h {mins}min {sec}s {millis}ms"
 
 
-# training MLP for DisneyBRDF
+# training MLP for PBR simple
 def train(steps):
-    data_dir = "data/disney-rtnam"
-    output_dir = "output/disney-rtnam"
+    data_dir = "data/pbr-simple"
+    output_dir = "output/pbr-simple"
 
     wandb.init(project="Realtime Neural Area Light")
 

@@ -97,9 +97,9 @@ class MollifiedDataset:
         material = torch.tensor(batch[:, 0:8], dtype=torch.float32)
         wi = torch.tensor(batch[:, 8:11], dtype=torch.float32)
         wo = torch.tensor(batch[:, 11:14], dtype=torch.float32)
-        brdf = torch.tensor(batch[:, 14:17], dtype=torch.float32)
+        brdf_log = torch.tensor(batch[:, 14:17], dtype=torch.float32)
 
-        return material, wi, wo, brdf
+        return material, wi, wo, brdf_log
 
 
 
@@ -169,9 +169,9 @@ class NormalDataset:
         material = torch.tensor(batch[:, 0:8], dtype=torch.float32)
         wi = torch.tensor(batch[:, 8:11], dtype=torch.float32)
         wo = torch.tensor(batch[:, 11:14], dtype=torch.float32)
-        brdf = torch.tensor(batch[:, 14:17], dtype=torch.float32)
+        brdf_log = torch.tensor(batch[:, 14:17], dtype=torch.float32)
 
-        return material, wi, wo, brdf
+        return material, wi, wo, brdf_log
 
 
 class SecondPhaseDataset:
@@ -258,12 +258,12 @@ class SecondPhaseDataset:
         sample = self.current_shard[self.sample_index]  # (N, 9)
         wi = torch.tensor(sample[:, 0:3], dtype=torch.float32).unsqueeze(0)  # (1, N, 3)
         wo = torch.tensor(sample[:, 3:6], dtype=torch.float32).unsqueeze(0)  # (1, N, 3)
-        brdf = torch.tensor(sample[:, 6:9], dtype=torch.float32).unsqueeze(
+        brdf_log = torch.tensor(sample[:, 6:9], dtype=torch.float32).unsqueeze(
             0
         )  # (1, N, 3)
 
         self.sample_index += 1
-        return wi, wo, brdf
+        return wi, wo, brdf_log
 
 
 class Encoder(nn.Module):
@@ -315,13 +315,9 @@ class Decoder(nn.Module):
         self.fc2 = nn.Linear(8 + 12, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 64)
-        self.fc5 = nn.Linear(64, 64)
-        self.fc6 = nn.Linear(64, 64)
-        self.fc7 = nn.Linear(64, 64)
-        self.fc8 = nn.Linear(64, 3)
+        self.fc5 = nn.Linear(64, 3)
         self.tanh = nn.Tanh()
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, latent, wi, wo):
         tf_input = self.tanh(self.fc1(latent))  # (B, 12)
@@ -330,16 +326,7 @@ class Decoder(nn.Module):
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
-        x = self.relu(self.fc5(x))
-        x = self.relu(self.fc6(x))
-        x = self.relu(self.fc7(x))
-        return self.sigmoid(self.fc8(x))  # (B, 3)
-
-
-def log1p4(x):
-    for _ in range(4):
-        x = torch.log1p(x)
-    return x
+        return self.relu(self.fc5(x))  # (B, 3)
 
 
 def write_exr(filename, data):  # data: H x W x C (float16)
@@ -391,9 +378,6 @@ def save_model_as_json(model, path):
                 layer_to_json(model.fc3),
                 layer_to_json(model.fc4),
                 layer_to_json(model.fc5),
-                layer_to_json(model.fc6),
-                layer_to_json(model.fc7),
-                layer_to_json(model.fc8),
             ],
         }
     }
@@ -418,8 +402,7 @@ def train_first_phase(
     )
     loss_fn = nn.L1Loss()
 
-    # mollified_data = MollifiedDataset(data_dir, num_steps=num_steps // 15)
-    mollified_data = MollifiedDataset(data_dir, num_steps=num_steps)
+    mollified_data = MollifiedDataset(data_dir, num_steps=num_steps // 15)
     normal_data = NormalDataset(data_dir)
 
     data = iter(mollified_data)
@@ -431,16 +414,15 @@ def train_first_phase(
 
     for step in tqdm(range(num_steps), desc="First Phase Training"):
         try:
-            material, wi, wo, brdf = next(data)
+            material, wi, wo, brdf_log = next(data)
         except StopIteration:
             data = iter(normal_data)
-            material, wi, wo, brdf = next(data)
+            material, wi, wo, brdf_log = next(data)
 
         material = material.to(device)
         wi = wi.to(device)
         wo = wo.to(device)
-        brdf = brdf.to(device)
-        brdf_log = log1p4(brdf)
+        brdf_log = brdf_log.to(device)
 
         latent = encoder(material)
         pred = decoder(latent, wi, wo)
@@ -485,7 +467,7 @@ def generate_latent_texture(data_dir, output_dir, device="cuda"):
         width //= 2
 
     material_path = os.path.join(data_dir, "second_phase_data.material.bin")
-    material_data = np.fromfile(material_path, dtype=np.float32).reshape(
+    material_data = np.fromfile(material_path, dtype=np.float16).reshape(
         texture_total_pixel_size, 8
     )
     material_tensor = torch.tensor(material_data, dtype=torch.float32).to(device)
@@ -578,15 +560,14 @@ def train_second_phase(
 
     for step in tqdm(range(num_steps), desc="Second Phase Training"):
         try:
-            wi, wo, brdf = next(data)
+            wi, wo, brdf_log = next(data)
         except StopIteration:
             data = iter(second_data)
-            wi, wo, brdf = next(data)
+            wi, wo, brdf_log = next(data)
 
         wi = wi.squeeze(0).to(device)  # (N, 3)
         wo = wo.squeeze(0).to(device)  # (N, 3)
-        brdf = brdf.squeeze(0).to(device)  # (N, 3)
-        brdf_log = log1p4(brdf)
+        brdf_log = brdf_log.squeeze(0).to(device)  # (N, 3)
 
         latent = latent_texture  # (N, 8)
 
