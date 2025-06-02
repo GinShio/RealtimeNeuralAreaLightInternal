@@ -315,7 +315,10 @@ class Decoder(nn.Module):
         self.fc2 = nn.Linear(8 + 12, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 64)
-        self.fc5 = nn.Linear(64, 3)
+        self.fc5 = nn.Linear(64, 64)
+        self.fc6 = nn.Linear(64, 64)
+        self.fc7 = nn.Linear(64, 64)
+        self.fc8 = nn.Linear(64, 3)
         self.tanh = nn.Tanh()
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -327,7 +330,10 @@ class Decoder(nn.Module):
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
-        return self.sigmoid(self.fc5(x))  # (B, 3)
+        x = self.relu(self.fc5(x))
+        x = self.relu(self.fc6(x))
+        x = self.relu(self.fc7(x))
+        return self.sigmoid(self.fc8(x))  # (B, 3)
 
 
 def log1p4(x):
@@ -385,6 +391,9 @@ def save_model_as_json(model, path):
                 layer_to_json(model.fc3),
                 layer_to_json(model.fc4),
                 layer_to_json(model.fc5),
+                layer_to_json(model.fc6),
+                layer_to_json(model.fc7),
+                layer_to_json(model.fc8),
             ],
         }
     }
@@ -695,7 +704,7 @@ def train(steps):
     train_second_phase(
         data_dir=data_dir,
         output_dir=output_dir,
-        num_steps=steps // 2,
+        num_steps=steps // 10,
         log_interval=100,
         save_interval=steps // 100,
         device="cuda",
