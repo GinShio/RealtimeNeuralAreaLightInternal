@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+use std::thread;
 
 use anyhow::Result;
 use ash::vk;
@@ -68,6 +70,9 @@ pub fn data_gen(
     let mut file = File::create(output_json_path)?;
     file.write_all(config.to_string().as_bytes())
         .expect("Failed to write config JSON");
+
+    // The number of queues for saving data in other threads.
+    let save_queue_count = 12;
 
     // base_color (3)
     // roughness (1)
@@ -607,6 +612,32 @@ pub fn data_gen(
         .expect("Failed to map uniform buffer")[0..std::mem::size_of::<UniformBuffer>()]
         .copy_from_slice(bytemuck::bytes_of(&uniform_data));
 
+    let (tx, rx): (SyncSender<(u64, Vec<u8>)>, Receiver<(u64, Vec<u8>)>) =
+        sync_channel(save_queue_count);
+    let save_handle = thread::spawn({
+        let output_dir = output_dir.to_owned();
+        move || {
+            while let Ok((i, data)) = rx.recv() {
+                let mut file = File::create(output_dir.join(format!(
+                    "first_phase_data{}.shard-{}.bin",
+                    if i < mollification_shard_count {
+                        "-mollified"
+                    } else {
+                        ""
+                    },
+                    if i < mollification_shard_count {
+                        i
+                    } else {
+                        i - mollification_shard_count
+                    }
+                )))
+                .unwrap();
+                file.write_all(&data)
+                    .expect("Failed to write first phase data shard");
+            }
+        }
+    });
+
     for i in 0..(mollification_shard_count + first_phase_shard_count) {
         let step_start = std::time::Instant::now();
 
@@ -686,24 +717,11 @@ pub fn data_gen(
 
         // save shard data
         {
-            let data_slice = first_phase_data_cpu_buffer_allocation
+            let data = first_phase_data_cpu_buffer_allocation
                 .mapped_slice()
-                .expect("Failed to map first phase data buffer");
-            let mut file = File::create(output_dir.join(format!(
-                "first_phase_data{}.shard-{}.bin",
-                if i < mollification_shard_count {
-                    "-mollified"
-                } else {
-                    ""
-                },
-                if i < mollification_shard_count {
-                    i
-                } else {
-                    i - mollification_shard_count
-                }
-            )))?;
-            file.write_all(data_slice)
-                .expect("Failed to write first phase data shard");
+                .expect("Failed to map first phase data buffer")
+                .to_vec();
+            tx.send((i, data)).unwrap();
         }
 
         let elapsed = step_start.elapsed();
@@ -716,6 +734,8 @@ pub fn data_gen(
         );
         std::io::stdout().flush().expect("Failed to flush stdout");
     }
+    drop(tx);
+    save_handle.join().unwrap();
 
     let elapsed = first_start.elapsed();
     let minutes = elapsed.as_secs() / 60;
@@ -835,6 +855,21 @@ pub fn data_gen(
         .expect("Failed to map uniform buffer")[0..std::mem::size_of::<UniformBuffer>()]
         .copy_from_slice(bytemuck::bytes_of(&uniform_data));
 
+    let (tx, rx): (SyncSender<(u64, Vec<u8>)>, Receiver<(u64, Vec<u8>)>) =
+        sync_channel(save_queue_count);
+    let save_handle = thread::spawn({
+        let output_dir = output_dir.to_owned();
+        move || {
+            while let Ok((i, data)) = rx.recv() {
+                let mut file =
+                    File::create(output_dir.join(format!("second_phase_data.shard-{}.bin", i)))
+                        .unwrap();
+                file.write_all(&data)
+                    .expect("Failed to write first phase data shard");
+            }
+        }
+    });
+
     for i in 0..second_phase_shard_count {
         let step_start = std::time::Instant::now();
 
@@ -906,13 +941,11 @@ pub fn data_gen(
 
         // save shard data
         {
-            let data_slice = second_phase_data_cpu_buffer_allocation
+            let data = second_phase_data_cpu_buffer_allocation
                 .mapped_slice()
-                .expect("Failed to map second phase data buffer");
-            let mut file =
-                File::create(output_dir.join(format!("second_phase_data.shard-{}.bin", i)))?;
-            file.write_all(data_slice)
-                .expect("Failed to write first phase data shard");
+                .expect("Failed to map second phase data buffer")
+                .to_vec();
+            tx.send((i, data)).unwrap();
         }
 
         let elapsed = step_start.elapsed();
@@ -925,6 +958,8 @@ pub fn data_gen(
         );
         std::io::stdout().flush().expect("Failed to flush stdout");
     }
+    drop(tx);
+    save_handle.join().unwrap();
 
     let elapsed = second_start.elapsed();
     let minutes = elapsed.as_secs() / 60;

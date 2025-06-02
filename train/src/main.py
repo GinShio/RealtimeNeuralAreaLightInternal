@@ -14,18 +14,18 @@ print(
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Train or generate data for a model.")
 parser.add_argument("model")
-parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
+parser.add_argument("--steps", type=int, default=100000, help="Number of steps")
 
 args = parser.parse_args()
 
 print("Train model: ", args.model)
-print("Number of epochs: ", args.epochs)
+print("Number of steps: ", args.steps)
 print()
 
 if args.model == "disney-rtnam":
     from train.disney_rtnam import train
 
-    train(args.epochs)
+    train(args.steps)
 else:
     print(f"Error: Invalid command '{args.command}'.")
     exit(1)

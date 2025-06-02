@@ -34,12 +34,13 @@ RWStructuredBuffer<float> data;
 [[vk::binding(2)]]
 RWStructuredBuffer<float> materialData;
 
-func localToTangent(v: float3)->float3x3
+// rotation from normal to (0, 0, 1)
+func tangentFrame(normal: float3)->float3x3
 {
-    let up = abs(v.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
-    let tangent = normalize(cross(up, v));
-    let bitangent = cross(v, tangent);
-    return float3x3(tangent, bitangent, v);
+    let up = abs(normal.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    let tangent = normalize(cross(up, normal));
+    let bitangent = cross(normal, tangent);
+    return float3x3(tangent, bitangent, normal);
 }
 
 func sampleWiWo(
@@ -49,25 +50,27 @@ func sampleWiWo(
 {
     for (var i = 0; i < 10; ++i)
     {
-        let thetaH = acos(sqrt(1.0 - rng.nextFloat()));
+        let zH = rng.nextFloat();
+        let rH = sqrt(1.0 - zH * zH);
         let phiH = 2.0 * PI * rng.nextFloat();
         let H = float3(
-            sin(thetaH) * cos(phiH),
-            sin(thetaH) * sin(phiH),
-            cos(thetaH));
+            rH * cos(phiH),
+            rH * sin(phiH),
+            zH);
 
-        let thetaDelta = acos(sqrt(1.0 - rng.nextFloat()));
+        let zDelta = 2.0 * rng.nextFloat() - 1.0;
+        let rDelta = sqrt(1.0 - zDelta * zDelta);
         let phiDelta = 2.0 * PI * rng.nextFloat();
         let delta = float3(
-            sin(thetaDelta) * cos(phiDelta),
-            sin(thetaDelta) * sin(phiDelta),
-            cos(thetaDelta));
+            rDelta * cos(phiDelta),
+            rDelta * sin(phiDelta),
+            zDelta);
 
-        let M = localToTangent(H);
+        let M = transpose(tangentFrame(H));
         let d = mul(M, delta);
 
         wi = normalize(d);
-        wo = 2.0 * dot(wi, H) * H - wi;
+        wo = normalize(2.0 * dot(wi, H) * H - wi);
 
         if (wo.z >= 0.0 && wi.z >= 0.0)
         {
@@ -88,7 +91,7 @@ func actualBrdfFunc(
 {
     let N = normalize(normal * 2 - 1);
 
-    let TBN = localToTangent(N);
+    let TBN = tangentFrame(N);
 
     let wi_tangent = mul(TBN, wi);
     let wo_tangent = mul(TBN, wo);

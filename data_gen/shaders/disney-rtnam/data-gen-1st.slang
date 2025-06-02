@@ -41,12 +41,13 @@ Sampler2D roughnessMetallicSampler;
 [[vk::binding(4)]]
 Sampler2D normalSampler;
 
-func localToTangent(v: float3)->float3x3
+// rotation from normal to (0, 0, 1)
+func tangentFrame(normal: float3)->float3x3
 {
-    let up = abs(v.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
-    let tangent = normalize(cross(up, v));
-    let bitangent = cross(v, tangent);
-    return float3x3(tangent, bitangent, v);
+    let up = abs(normal.z) < 0.9999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    let tangent = normalize(cross(up, normal));
+    let bitangent = cross(normal, tangent);
+    return float3x3(tangent, bitangent, normal);
 }
 
 func sampleWiWo(
@@ -56,21 +57,23 @@ func sampleWiWo(
 {
     for (var i = 0; i < 10; ++i)
     {
-        let thetaH = acos(sqrt(1.0 - rng.nextFloat()));
+        let zH = rng.nextFloat();
+        let rH = sqrt(1.0 - zH * zH);
         let phiH = 2.0 * PI * rng.nextFloat();
         let H = float3(
-            sin(thetaH) * cos(phiH),
-            sin(thetaH) * sin(phiH),
-            cos(thetaH));
+            rH * cos(phiH),
+            rH * sin(phiH),
+            zH);
 
-        let thetaDelta = acos(sqrt(1.0 - rng.nextFloat()));
+        let zDelta = 2.0 * rng.nextFloat() - 1.0;
+        let rDelta = sqrt(1.0 - zDelta * zDelta);
         let phiDelta = 2.0 * PI * rng.nextFloat();
         let delta = float3(
-            sin(thetaDelta) * cos(phiDelta),
-            sin(thetaDelta) * sin(phiDelta),
-            cos(thetaDelta));
+            rDelta * cos(phiDelta),
+            rDelta * sin(phiDelta),
+            zDelta);
 
-        let M = localToTangent(H);
+        let M = transpose(tangentFrame(H));
         let d = mul(M, delta);
 
         wi = normalize(d);
@@ -112,10 +115,9 @@ func modifyWi(inout rng: PCG32, wi: float3)->float3
     }
 
     let deg = 10.0 * pc.mollificationScale;
-
     let cosThetaMax = cos(radians(deg));
 
-    let cosTheta = lerp(cosThetaMax, 1.0, rng.nextFloat());
+    let cosTheta = 1.0 - rng.nextFloat() * (1.0 - cosThetaMax);
     let sinTheta = sqrt(1.0 - cosTheta * cosTheta);
     let phi = 2.0 * PI * rng.nextFloat();
     let localDir = float3(
@@ -123,9 +125,9 @@ func modifyWi(inout rng: PCG32, wi: float3)->float3
         sinTheta * sin(phi),
         cosTheta);
 
-    let TBN = localToTangent(wi);
-
+    let TBN = transpose(tangentFrame(wi));
     let modifiedWi = mul(TBN, localDir);
+
     return normalize(modifiedWi);
 }
 
@@ -145,23 +147,25 @@ func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
 
 func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLevel: float)->float3
 {
+    const uint ITERATION = 256;
+
     let mipLevelFloor = floor(mipLevel);
 
-    let iteration = 64;
-
     var brdf = float3(0.0);
-    for (var i = 0; i < iteration; ++i)
+    for (var i = 0; i < ITERATION; ++i)
     {
         let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
         let metallicRoughness =
             roughnessMetallicSampler.SampleLevel(uv_modify, mipLevelFloor);
-        let normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz * 2 - 1;
+        let normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
         let roughness = metallicRoughness.g;
         let metallic = metallicRoughness.b;
 
-        let TBN = localToTangent(normalize(normal));
+        let N = normalize(normal * 2 - 1);
+
+        let TBN = tangentFrame(N);
 
         let wi_modify = modifyWi(rng, wi);
 
@@ -170,7 +174,7 @@ func actualBrdfFunc(inout rng: PCG32, wi: float3, wo: float3, uv: float2, mipLev
         brdf += DisneyBRDF(wi_tangent, wo_tangent, srgbToLinear(baseColor.rgb), roughness, metallic);
     }
 
-    brdf /= float(iteration);
+    brdf /= float(ITERATION);
     return brdf;
 }
 

@@ -16,14 +16,14 @@ torch.set_float32_matmul_precision("high")
 
 
 class MollifiedDataset:
-    def __init__(self, base_dir, batch_size=65536, times=1):
+    def __init__(self, base_dir, num_steps):
         self.base_dir = base_dir
-        self.batch_size = batch_size
-        self.times = times
+        self.num_steps = num_steps
 
         with open(os.path.join(base_dir, "data_gen_config.json"), "r") as f:
             self.config = json.load(f)
 
+        self.batch_size = self.config["batch_size"]
         self.first_phase_shard_size = self.config["first_phase_shard_size"]
         self.mollified_shard_count = self.config["mollification_shard_count"]
 
@@ -32,29 +32,29 @@ class MollifiedDataset:
             for i in range(self.mollified_shard_count)
         ]
 
+        self.total_samples = num_steps * self.batch_size
+        self.sample_limit_per_shard = self.total_samples // self.mollified_shard_count
+
         self.shard_index = 0
         self.sample_index = 0
+        self.sample_count = 0
         self.current_shard = None
         self.next_shard = None
         self.prefetch_thread = None
-        self.current_repeat = 0
+        self.sample_count = 0
 
     def __iter__(self):
         self.shard_index = 0
         self.sample_index = 0
-        self.current_repeat = 0
+        self.sample_count = 0
         self._load_next_shard()
         return self
 
     def _start_prefetch(self):
         if self.shard_index < len(self.files):
-            filepath = self.files[self.shard_index]
-
+            path = self.files[self.shard_index]
             def load():
-                self.next_shard = np.fromfile(filepath, dtype=np.float32).reshape(
-                    -1, 17
-                )
-
+                self.next_shard = np.fromfile(path, dtype=np.float32).reshape(-1, 17)
             self.prefetch_thread = threading.Thread(target=load)
             self.prefetch_thread.start()
 
@@ -64,35 +64,35 @@ class MollifiedDataset:
             self.current_shard = self.next_shard
             self.next_shard = None
             self.prefetch_thread = None
-        elif self.current_shard is None:
-            # first time loading
+        else:
             if self.shard_index >= len(self.files):
                 self.current_shard = None
                 return
-            filepath = self.files[self.shard_index]
-            self.current_shard = np.fromfile(filepath, dtype=np.float32).reshape(-1, 17)
+            path = self.files[self.shard_index]
+            self.current_shard = np.fromfile(path, dtype=np.float32).reshape(-1, 17)
 
         self.sample_index = 0
-        self.current_repeat += 1
-
-        if self.current_repeat >= self.times:
-            self.current_repeat = 0
-            self.shard_index += 1
-            self._start_prefetch()
+        self.sample_count = 0
+        self.shard_index += 1
+        self._start_prefetch()
 
     def __next__(self):
         if self.current_shard is None:
             raise StopIteration
 
-        if self.sample_index + self.batch_size > len(self.current_shard):
+        if self.sample_count >= self.sample_limit_per_shard:
             self._load_next_shard()
             if self.current_shard is None:
                 raise StopIteration
+
+        if self.sample_index + self.batch_size > len(self.current_shard):
+            self.sample_index = 0
 
         batch = self.current_shard[
             self.sample_index : self.sample_index + self.batch_size
         ]
         self.sample_index += self.batch_size
+        self.sample_count += self.batch_size
 
         material = torch.tensor(batch[:, 0:8], dtype=torch.float32)
         wi = torch.tensor(batch[:, 8:11], dtype=torch.float32)
@@ -102,14 +102,15 @@ class MollifiedDataset:
         return material, wi, wo, brdf
 
 
+
 class NormalDataset:
-    def __init__(self, base_dir, batch_size=65536):
+    def __init__(self, base_dir):
         self.base_dir = base_dir
-        self.batch_size = batch_size
 
         with open(os.path.join(base_dir, "data_gen_config.json"), "r") as f:
             self.config = json.load(f)
 
+        self.batch_size = self.config["batch_size"]
         self.first_phase_shard_size = self.config["first_phase_shard_size"]
         self.first_phase_shard_count = self.config["first_phase_shard_count"]
 
@@ -405,8 +406,9 @@ def train_first_phase(
     )
     loss_fn = nn.L1Loss()
 
-    mollified_data = MollifiedDataset(data_dir, batch_size=65536)
-    normal_data = NormalDataset(data_dir, batch_size=65536)
+    # mollified_data = MollifiedDataset(data_dir, num_steps=num_steps // 15)
+    mollified_data = MollifiedDataset(data_dir, num_steps=num_steps)
+    normal_data = NormalDataset(data_dir)
 
     data = iter(mollified_data)
     for i in range(100):
@@ -513,6 +515,7 @@ def train_second_phase(
     num_steps=1000,
     lr=1e-4,
     log_interval=100,
+    save_interval=10000,
     device="cuda",
 ):
     with open(os.path.join(data_dir, "data_gen_config.json"), "r") as f:
@@ -587,6 +590,7 @@ def train_second_phase(
                 }
             )
 
+        if step % save_interval == 0:
             # make directory for this step
             step_output_dir = os.path.join(output_dir, f"step_{step}")
             os.makedirs(step_output_dir, exist_ok=True)
@@ -665,7 +669,7 @@ def format_duration(seconds: float) -> str:
 
 
 # training MLP for DisneyBRDF
-def train(epochs):
+def train(steps):
     data_dir = "data/disney-rtnam"
     output_dir = "output/disney-rtnam"
 
@@ -674,7 +678,7 @@ def train(epochs):
     start = time.time()
 
     # first phase
-    train_first_phase(data_dir, output_dir, num_steps=epochs * 100, device="cuda")
+    train_first_phase(data_dir, output_dir, num_steps=steps, device="cuda")
 
     # generate latent texture
     generate_latent_texture(data_dir, output_dir, device="cuda")
@@ -683,9 +687,10 @@ def train(epochs):
     train_second_phase(
         data_dir=data_dir,
         output_dir=output_dir,
-        num_steps=epochs * 100 // 10,
+        num_steps=steps // 10,
         lr=1e-3,
         log_interval=100,
+        save_interval=steps // 10,
         device="cuda",
     )
 
