@@ -231,7 +231,7 @@ struct Model
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
         let encoderFinalAct = rtxns::mlp::SigmoidAct<half, 8>();
-        let decoderFinalAct = rtxns::mlp::SigmoidAct<half, 3>();
+        let decoderFinalAct = rtxns::mlp::ReLUAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::InferencingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -298,46 +298,13 @@ struct Model
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 4rd layer
-        hidden = LinearOp<half, 64, 64>(
+        // decoder 4th layer
+        output = LinearOp<half, 3, 64>(
             hidden,
             decoderParams,
             uint2(
                 uniforms.weightOffsets1[0],
                 uniforms.biasOffsets1[0]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // decoder 5rd layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            decoderParams,
-            uint2(
-                uniforms.weightOffsets1[1],
-                uniforms.biasOffsets1[1]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // decoder 6rd layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            decoderParams,
-            uint2(
-                uniforms.weightOffsets1[2],
-                uniforms.biasOffsets1[2]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
-
-        // decoder 7th layer
-        output = LinearOp<half, 3, 64>(
-            hidden,
-            decoderParams,
-            uint2(
-                uniforms.weightOffsets1[3],
-                uniforms.biasOffsets1[3]),
             matrixLayout,
             componentType);
         output = decoderFinalAct.eval(output);
@@ -362,23 +329,17 @@ struct Model
     MatrixBiasBuffer<half> decoderParameters;
 }
 
-func inverse_log1p4(y: float3)->float3
+func inverse_log1p(y: float3)->float3
 {
     float3 ret = y;
-    ret = exp(ret) - 1.0;
-    ret = exp(ret) - 1.0;
-    ret = exp(ret) - 1.0;
     ret = exp(ret) - 1.0;
     return ret;
 }
 
 [Differentiable]
-func log1p4(x: float)->float
+func log1p(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
     ret = log(1.0 + ret);
     return ret;
 }
@@ -389,7 +350,7 @@ func LogL1Loss(no_diff target: float3, predicted: float3, no_diff scale: float)-
     var loss = float3(0.0);
     for (var i = 0; i < 3; ++i)
     {
-        let t = log1p4(target[i]);
+        let t = log1p(target[i]);
         let p = predicted[i];
         loss[i] = abs(t - p);
     }
@@ -528,9 +489,10 @@ func fsMain(input: VertexOutput)->FragmentOutput
                 continue;
 
             let output = model.forward(latentVector, normalize(Lt), normalize(Vt));
-            let brdf = inverse_log1p4(float3(output[0], output[1], output[2]));
+            let brdf = inverse_log1p(float3(output[0], output[1], output[2]));
             let lightColor = srgbToLinear(light.color);
             let cosTheta = max(dot(Lt, Nt), 0.0);
+            mlpOutput = brdf;
             mlpColor += brdf * lightColor * light.intensity * cosTheta;
         }
     }
