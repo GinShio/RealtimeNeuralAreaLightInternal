@@ -517,7 +517,7 @@ def train_second_phase(
     data_dir,
     output_dir,
     num_steps=1000,
-    lr=1e-4,
+    lr=1e-3,
     log_interval=100,
     save_interval=10000,
     device="cuda",
@@ -559,6 +559,9 @@ def train_second_phase(
     decoder = Decoder().to(device)
     decoder.load_state_dict(torch.load(os.path.join(output_dir, "decoder.pth")))
     optimizer = torch.optim.Adam(list(decoder.parameters()) + [latent_texture], lr=lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=num_steps, eta_min= lr / 10
+    )
     loss_fn = nn.L1Loss()
 
     second_data = SecondPhaseDataset(data_dir)
@@ -584,6 +587,7 @@ def train_second_phase(
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         if step % log_interval == 0:
             # Log to Weights & Biases
