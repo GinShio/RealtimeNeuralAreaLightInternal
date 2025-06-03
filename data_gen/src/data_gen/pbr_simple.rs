@@ -883,7 +883,7 @@ pub fn data_gen(
     let minutes = elapsed.as_secs() / 60;
     let seconds = elapsed.as_secs() % 60;
     let millis = elapsed.subsec_millis();
-    print!(
+    println!(
         "  Second phase material data generation completed ({:02}m {:02}s {:02}ms)",
         minutes, seconds, millis
     );

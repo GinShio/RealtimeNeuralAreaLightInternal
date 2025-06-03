@@ -10,8 +10,6 @@ import "../rtxns/Utils";
 
 import "brdf";
 
-const float PI = 3.14159265358979323846;
-
 struct PushConstants
 {
     uint64_t seed;
@@ -86,7 +84,7 @@ func sampleWiWo(
         wi = normalize(d);
         wo = normalize(2.0 * dot(wi, H) * H - wi);
 
-        if (wo.z >= 0.0 && wi.z >= 0.0)
+        if (wo.z >= 0.0)
         {
             return;
         }
@@ -236,6 +234,16 @@ func computeDistribution(
     return D / float(ITERATIONS);
 }
 
+func log1p4(x: float)->float
+{
+    var ret = x;
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    return ret;
+}
+
 [numthreads(64, 1, 1)]
 void main(uint3 tid: SV_DispatchThreadID)
 {
@@ -342,7 +350,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 25] = half(v4Dir.z);
     data[index + 26] = half(v4Dist);
     data[index + 27] = half(normalizedArea);
-    data[index + 28] = half(D.x);
-    data[index + 29] = half(D.y);
-    data[index + 30] = half(D.z);
+    data[index + 28] = half(log1p4(D.x));
+    data[index + 29] = half(log1p4(D.y));
+    data[index + 30] = half(log1p4(D.z));
 }

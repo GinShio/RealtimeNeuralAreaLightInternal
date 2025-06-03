@@ -1,4 +1,4 @@
-const float PI = 3.14159265358979323846;
+public static const float PI = 3.14159265358979323846;
 
 public func PbrBRDF(
     baseColor: float3,

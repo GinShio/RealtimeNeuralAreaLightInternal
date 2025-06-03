@@ -340,13 +340,9 @@ class Decoder(nn.Module):
         self.fc2 = nn.Linear(8 + 30 + 4 + 1, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 64)
-        self.fc5 = nn.Linear(64, 64)
-        self.fc6 = nn.Linear(64, 64)
-        self.fc7 = nn.Linear(64, 64)
-        self.fc8 = nn.Linear(64, 3)
+        self.fc5 = nn.Linear(64, 3)
         self.tanh = nn.Tanh()
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, latent, wo, v1, v1Dist, v2, v2Dist, v3, v3Dist, v4, v4Dist, area):
         tf_input = self.tanh(self.fc1(latent))  # (B, 12)
@@ -357,10 +353,7 @@ class Decoder(nn.Module):
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
-        x = self.relu(self.fc5(x))
-        x = self.relu(self.fc6(x))
-        x = self.relu(self.fc7(x))
-        return self.sigmoid(self.fc8(x))  # (B, 3)
+        return torch.exp(self.fc5(x) - 3.0)  # (B, 3)
 
 
 def log1p4(x):
@@ -418,9 +411,6 @@ def save_model_as_json(model, path):
                 layer_to_json(model.fc3),
                 layer_to_json(model.fc4),
                 layer_to_json(model.fc5),
-                layer_to_json(model.fc6),
-                layer_to_json(model.fc7),
-                layer_to_json(model.fc8),
             ],
         }
     }
@@ -430,6 +420,14 @@ def save_model_as_json(model, path):
     os.makedirs(parent_dir, exist_ok=True)
     with open(path, "w") as f:
         json.dump(model_json, f, indent=2)
+
+
+def log1p4(x):
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    return x
 
 
 def train_first_phase(
@@ -470,7 +468,8 @@ def train_first_phase(
 
         latent = encoder(material)
         pred = decoder(latent, wi, wo)
-        loss = loss_fn(pred, brdf_log)
+        pred_log = log1p4(pred)
+        loss = loss_fn(pred_log, brdf_log)
 
         optimizer.zero_grad()
         loss.backward()
@@ -552,7 +551,7 @@ def train_second_phase(
     data_dir,
     output_dir,
     num_steps=1000,
-    lr=2e-4,
+    lr=1e-4,
     log_interval=100,
     save_interval=10000,
     device="cuda",
@@ -617,7 +616,8 @@ def train_second_phase(
         latent = latent_texture  # (N, 8)
 
         pred = decoder(latent, wi, wo)  # (N, 3)
-        loss = loss_fn(pred, brdf_log)
+        pred_log = log1p4(pred)
+        loss = loss_fn(pred_log, brdf_log)
 
         optimizer.zero_grad()
         loss.backward()

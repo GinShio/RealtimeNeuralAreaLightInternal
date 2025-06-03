@@ -47,10 +47,10 @@ fn main() -> Result<()> {
             )?;
         }
         "pbr-simple" => {
-            let base_color_texture_path = "assets/pbr-simple/baseColor.png";
-            let metallic_texture_path = "assets/pbr-simple/metallic.png";
-            let roughness_texture_path = "assets/pbr-simple/roughness.png";
-            let normal_texture_path = "assets/pbr-simple/normal.png";
+            let base_color_texture_path = "assets/pbr-simple/plane/BaseColor.png";
+            let metallic_texture_path = "assets/pbr-simple/plane/Metallic.png";
+            let roughness_texture_path = "assets/pbr-simple/plane/Roughness.png";
+            let normal_texture_path = "assets/pbr-simple/plane/Normal.png";
             let output_dir = "train/data/pbr-simple/";
             data_gen::pbr_simple::data_gen(
                 &mut vulkan_state,
