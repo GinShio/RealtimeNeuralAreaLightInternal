@@ -8,12 +8,13 @@ import "../rtxns/MLP";
 import "../rtxns/PCG32";
 import "../rtxns/Utils";
 
+import "sample-direction";
+import "clipping";
 import "brdf";
 
 struct PushConstants
 {
     uint64_t seed;
-    float mollificationScale;
 }
 
 [[push_constant]]
@@ -139,30 +140,6 @@ func rotationMatrixFromEuler(euler: float3)->float3x3
     return mul(rotY, mul(rotX, rotZ));
 }
 
-func modifyWi(inout rng: PCG32, wi: float3)->float3
-{
-    if (pc.mollificationScale <= 0.0)
-    {
-        return wi;
-    }
-
-    let deg = 10.0 * pc.mollificationScale;
-    let cosThetaMax = cos(radians(deg));
-
-    let cosTheta = 1.0 - rng.nextFloat() * (1.0 - cosThetaMax);
-    let sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-    let phi = 2.0 * PI * rng.nextFloat();
-    let localDir = float3(
-        sinTheta * cos(phi),
-        sinTheta * sin(phi),
-        cosTheta);
-
-    let TBN = transpose(tangentFrame(wi));
-    let modifiedWi = mul(TBN, localDir);
-
-    return normalize(modifiedWi);
-}
-
 func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
 {
     let levelWidth = uniforms.textureSize / exp2(mipLevel);
@@ -185,7 +162,6 @@ func computeDistribution(
     v2: float3,
     v3: float3,
     v4: float3,
-    area: float,
     mipLevel: float)
     ->float3
 {
@@ -195,10 +171,12 @@ func computeDistribution(
 
     float3 D = float3(0.0, 0.0, 0.0);
 
-    let edge1 = v2 - v1;
-    let edge2 = v4 - v1;
+    let wt = WeightedTriangles.clipAndTriangulateQuad(v1, v2, v3, v4);
 
-    let lightNormal = normalize(cross(edge1, edge2));
+    if (wt.triCount == 0)
+    {
+        return D; // No triangles to sample from
+    }
 
     for (uint i = 0; i < ITERATIONS; ++i)
     {
@@ -213,33 +191,31 @@ func computeDistribution(
         let u = rng.nextFloat();
         let v = rng.nextFloat();
 
-        let lightPos = v1 + u * edge1 + v * edge2;
+        let triangle = wt.sample(rng);
+        let bary = triangle.randomBarycentric(rng);
+        let lightPos = triangle.barycentricToPosition(bary);
+        let lightNormal = triangle.normal();
 
         let wi = normalize(lightPos);
         let NdotL = saturate(dot(normal, wi));
-        let LnDotWi = saturate(dot(lightNormal, -wi));
+        let LnDotWi = saturate(abs(dot(lightNormal, -wi)));
 
         let distanceSquared = dot(lightPos, lightPos);
         let G = (NdotL * LnDotWi) / (distanceSquared + 1e-5);
 
-        let wi_modify = modifyWi(rng, wi);
-
         if (G > 0.0)
         {
-            let brdf = PbrBRDF(srgbToLinear(baseColor.rgb), roughness, metallic, normal, wo, wi_modify);
-            D += brdf * G * area;
+            let brdf = PbrBRDF(srgbToLinear(baseColor.rgb), roughness, metallic, normal, wo, wi);
+            D += brdf * G * wt.totalArea;
         }
     }
 
     return D / float(ITERATIONS);
 }
 
-func log1p4(x: float)->float
+func log1p(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
     ret = log(1.0 + ret);
     return ret;
 }
@@ -269,47 +245,11 @@ void main(uint3 tid: SV_DispatchThreadID)
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 
-    // sample light size
-    let width = rng.nextFloat() * uniforms.maxLightSize;
-    let height = rng.nextFloat() * uniforms.maxLightSize;
-    let size = float2(width, height);
-    let area = width * height;
-    let normalizedArea = area / (uniforms.maxLightSize * uniforms.maxLightSize);
-
-    // sample light rotation
-    let x = rng.nextFloat() * 2.0 * PI;
-    let y = rng.nextFloat() * 2.0 * PI;
-    let z = rng.nextFloat() * 2.0 * PI;
-    let rotationEuler = float3(x, y, z);
-
-    // sample light distance
-    let distance = rng.nextFloat() * uniforms.maxLightDistance;
-    let lightTranslation = normalize(wi) * distance;
-
-    // calculate light vertex positions
-    var v1 = float3(-width / 2.0, -height / 2.0, 0.0);
-    var v2 = float3(width / 2.0, -height / 2.0, 0.0);
-    var v3 = float3(width / 2.0, height / 2.0, 0.0);
-    var v4 = float3(-width / 2.0, height / 2.0, 0.0);
-
-    let rotationMatrix = rotationMatrixFromEuler(rotationEuler);
-
-    v1 = mul(rotationMatrix, v1) + lightTranslation;
-    v2 = mul(rotationMatrix, v2) + lightTranslation;
-    v3 = mul(rotationMatrix, v3) + lightTranslation;
-    v4 = mul(rotationMatrix, v4) + lightTranslation;
-
-    // light vertex directions and distances
-    let maxDistance =
-        uniforms.maxLightDistance + uniforms.maxLightSize / 2.0 * sqrt(2.0);
-    let v1Dir = normalize(v1);
-    let v1Dist = length(v1) / maxDistance;
-    let v2Dir = normalize(v2);
-    let v2Dist = length(v2) / maxDistance;
-    let v3Dir = normalize(v3);
-    let v3Dist = length(v3) / maxDistance;
-    let v4Dir = normalize(v4);
-    let v4Dist = length(v4) / maxDistance;
+    float3 v1;
+    float3 v2;
+    float3 v3;
+    float3 v4;
+    sampleDirection(rng, wi, v1, v2, v3, v4);
 
     // compute D
     let D = computeDistribution(
@@ -317,11 +257,10 @@ void main(uint3 tid: SV_DispatchThreadID)
         uv,
         wo,
         v1, v2, v3, v4,
-        area,
         mipLevel);
 
     // Save training data
-    let index = i * 31;
+    let index = i * 26;
     data[index + 0] = half(baseColor.x);
     data[index + 1] = half(baseColor.y);
     data[index + 2] = half(baseColor.z);
@@ -333,24 +272,19 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 8] = half(wo.x);
     data[index + 9] = half(wo.y);
     data[index + 10] = half(wo.z);
-    data[index + 11] = half(v1Dir.x);
-    data[index + 12] = half(v1Dir.y);
-    data[index + 13] = half(v1Dir.z);
-    data[index + 14] = half(v1Dist);
-    data[index + 15] = half(v2Dir.x);
-    data[index + 16] = half(v2Dir.y);
-    data[index + 17] = half(v2Dir.z);
-    data[index + 18] = half(v2Dist);
-    data[index + 19] = half(v3Dir.x);
-    data[index + 20] = half(v3Dir.y);
-    data[index + 21] = half(v3Dir.z);
-    data[index + 22] = half(v3Dist);
-    data[index + 23] = half(v4Dir.x);
-    data[index + 24] = half(v4Dir.y);
-    data[index + 25] = half(v4Dir.z);
-    data[index + 26] = half(v4Dist);
-    data[index + 27] = half(normalizedArea);
-    data[index + 28] = half(log1p4(D.x));
-    data[index + 29] = half(log1p4(D.y));
-    data[index + 30] = half(log1p4(D.z));
+    data[index + 11] = half(v1.x);
+    data[index + 12] = half(v1.y);
+    data[index + 13] = half(v1.z);
+    data[index + 14] = half(v2.x);
+    data[index + 15] = half(v2.y);
+    data[index + 16] = half(v2.z);
+    data[index + 17] = half(v3.x);
+    data[index + 18] = half(v3.y);
+    data[index + 19] = half(v3.z);
+    data[index + 20] = half(v4.x);
+    data[index + 21] = half(v4.y);
+    data[index + 22] = half(v4.z);
+    data[index + 23] = half(log1p(D.x));
+    data[index + 24] = half(log1p(D.y));
+    data[index + 25] = half(log1p(D.z));
 }

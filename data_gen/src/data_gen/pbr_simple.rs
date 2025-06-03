@@ -21,8 +21,8 @@ use crate::{
 struct UniformBuffer {
     data_size: u32,
     texture_size: u32,
-    max_light_size: f32,
     pixel_count: u32,
+    max_light_size: f32,
     max_light_distance: f32,
     _padding: [u32; 3],
 }
@@ -31,8 +31,7 @@ struct UniformBuffer {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct FirstPhasePushConstants {
     seed: u64,
-    mollification_scale: f32,
-    _padding: u32,
+    _padding: [u32; 2],
 }
 
 #[repr(C)]
@@ -51,7 +50,6 @@ pub fn data_gen(
     texture_size: u32,
     batch_size: u64,
     first_phase_shard_size: u64,
-    mollification_shard_count: u64,
     first_phase_shard_count: u64,
     second_phase_shard_size: u64,
     second_phase_shard_count: u64,
@@ -68,7 +66,6 @@ pub fn data_gen(
         "texture_size": texture_size,
         "batch_size": batch_size,
         "first_phase_shard_size": first_phase_shard_size,
-        "mollification_shard_count": mollification_shard_count,
         "first_phase_shard_count": first_phase_shard_count,
         "second_phase_shard_size": second_phase_shard_size,
         "second_phase_shard_count": second_phase_shard_count,
@@ -89,10 +86,9 @@ pub fn data_gen(
     // metallic (1)
     // normal (3)
     // wo (3)
-    // vertex direction + distance ((3 + 1) * 4)
-    // area (1)
+    // vertex direction (3 * 4)
     // Distribution (3)
-    let first_shard_data_component_size = 31;
+    let first_shard_data_component_size = 26;
 
     // base_color (3)
     // roughness (1)
@@ -101,10 +97,9 @@ pub fn data_gen(
     let second_material_data_component_size = 8;
 
     // wo (3)
-    // vertex direction + distance ((3 + 1) * 4)
-    // area (1)
+    // vertex direction + distance (3 * 4)
     // Distribution (3)
-    let second_shard_data_component_size = 23;
+    let second_shard_data_component_size = 18;
 
     let texture_total_pixel_size = {
         let mut pixel_count = 0;
@@ -669,40 +664,23 @@ pub fn data_gen(
         let output_dir = output_dir.to_owned();
         move || {
             while let Ok((i, data)) = rx.recv() {
-                let mut file = File::create(output_dir.join(format!(
-                    "first_phase_data{}.shard-{}.bin",
-                    if i < mollification_shard_count {
-                        "-mollified"
-                    } else {
-                        ""
-                    },
-                    if i < mollification_shard_count {
-                        i
-                    } else {
-                        i - mollification_shard_count
-                    }
-                )))
-                .unwrap();
+                let mut file =
+                    File::create(output_dir.join(format!("first_phase_data.shard-{}.bin", i)))
+                        .unwrap();
                 file.write_all(&data)
                     .expect("Failed to write first phase data shard");
             }
         }
     });
 
-    for i in 0..(mollification_shard_count + first_phase_shard_count) {
+    for i in 0..first_phase_shard_count {
         let step_start = std::time::Instant::now();
 
         let seed: u64 = rng.random();
 
-        let mollification_scale = if i < mollification_shard_count {
-            1.0 - i as f32 / mollification_shard_count as f32
-        } else {
-            0.0
-        };
         let push_constants = FirstPhasePushConstants {
             seed,
-            mollification_scale,
-            _padding: 0,
+            _padding: [0; 2],
         };
 
         unsafe {
@@ -871,7 +849,7 @@ pub fn data_gen(
 
     // save material data
     {
-        let data_slice = first_phase_data_cpu_buffer_allocation
+        let data_slice = second_phase_material_data_cpu_buffer_allocation
             .mapped_slice()
             .expect("Failed to map second phase material data buffer");
         let mut file = File::create(output_dir.join("second_phase_data.material.bin"))?;

@@ -26,6 +26,10 @@ if args.model == "disney-rtnam":
     from train.disney_rtnam import train
 
     train(args.steps)
+elif args.model == "pbr-simple":
+    from train.pbr_simple import train
+
+    train(args.steps)
 else:
     print(f"Error: Invalid command '{args.command}'.")
     exit(1)

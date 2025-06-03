@@ -15,102 +15,6 @@ import wandb
 torch.set_float32_matmul_precision("high")
 
 
-class MollifiedDataset:
-    def __init__(self, base_dir, num_steps):
-        self.base_dir = base_dir
-        self.num_steps = num_steps
-
-        with open(os.path.join(base_dir, "data_gen_config.json"), "r") as f:
-            self.config = json.load(f)
-
-        self.batch_size = self.config["batch_size"]
-        self.first_phase_shard_size = self.config["first_phase_shard_size"]
-        self.mollified_shard_count = self.config["mollification_shard_count"]
-
-        self.files = [
-            os.path.join(base_dir, f"first_phase_data-mollified.shard-{i}.bin")
-            for i in range(self.mollified_shard_count)
-        ]
-
-        self.total_samples = num_steps * self.batch_size
-        self.sample_limit_per_shard = self.total_samples // self.mollified_shard_count
-
-        self.shard_index = 0
-        self.sample_index = 0
-        self.sample_count = 0
-        self.current_shard = None
-        self.next_shard = None
-        self.prefetch_thread = None
-        self.sample_count = 0
-
-    def __iter__(self):
-        self.shard_index = 0
-        self.sample_index = 0
-        self.sample_count = 0
-        self._load_next_shard()
-        return self
-
-    def _start_prefetch(self):
-        if self.shard_index < len(self.files):
-            path = self.files[self.shard_index]
-            def load():
-                self.next_shard = np.fromfile(path, dtype=np.float16).reshape(-1, 31)
-            self.prefetch_thread = threading.Thread(target=load)
-            self.prefetch_thread.start()
-
-    def _load_next_shard(self):
-        if self.prefetch_thread is not None:
-            self.prefetch_thread.join()
-            self.current_shard = self.next_shard
-            self.next_shard = None
-            self.prefetch_thread = None
-        else:
-            if self.shard_index >= len(self.files):
-                self.current_shard = None
-                return
-            path = self.files[self.shard_index]
-            self.current_shard = np.fromfile(path, dtype=np.float16).reshape(-1, 31)
-
-        self.sample_index = 0
-        self.sample_count = 0
-        self.shard_index += 1
-        self._start_prefetch()
-
-    def __next__(self):
-        if self.current_shard is None:
-            raise StopIteration
-
-        if self.sample_count >= self.sample_limit_per_shard:
-            self._load_next_shard()
-            if self.current_shard is None:
-                raise StopIteration
-
-        if self.sample_index + self.batch_size > len(self.current_shard):
-            self.sample_index = 0
-
-        batch = self.current_shard[
-            self.sample_index : self.sample_index + self.batch_size
-        ]
-        self.sample_index += self.batch_size
-        self.sample_count += self.batch_size
-
-        material = torch.tensor(batch[:, 0:8], dtype=torch.float32)
-        wo = torch.tensor(batch[:, 8:11], dtype=torch.float32)
-        v1 = torch.tensor(batch[:, 11:14], dtype=torch.float32)
-        v1Dist = torch.tensor(batch[:, 14:15], dtype=torch.float32)
-        v2 = torch.tensor(batch[:, 15:18], dtype=torch.float32)
-        v2Dist = torch.tensor(batch[:, 18:19], dtype=torch.float32)
-        v3 = torch.tensor(batch[:, 19:22], dtype=torch.float32)
-        v3Dist = torch.tensor(batch[:, 22:23], dtype=torch.float32)
-        v4 = torch.tensor(batch[:, 23:26], dtype=torch.float32)
-        v4Dist = torch.tensor(batch[:, 26:27], dtype=torch.float32)
-        area = torch.tensor(batch[:, 27:28], dtype=torch.float32)
-        D = torch.tensor(batch[:, 28:31], dtype=torch.float32)
-
-        return material, wo, v1, v1Dist, v2, v2Dist, v3, v3Dist, v4, v4Dist, area, D
-
-
-
 class NormalDataset:
     def __init__(self, base_dir):
         self.base_dir = base_dir
@@ -144,7 +48,7 @@ class NormalDataset:
         filepath = self.files[next_index]
 
         def load():
-            self.next_shard = np.fromfile(filepath, dtype=np.float16).reshape(-1, 31)
+            self.next_shard = np.fromfile(filepath, dtype=np.float16).reshape(-1, 26)
 
         self.prefetch_thread = threading.Thread(target=load)
         self.prefetch_thread.start()
@@ -157,7 +61,7 @@ class NormalDataset:
             self.prefetch_thread = None
         else:
             filepath = self.files[self.shard_index]
-            self.current_shard = np.fromfile(filepath, dtype=np.float16).reshape(-1, 31)
+            self.current_shard = np.fromfile(filepath, dtype=np.float16).reshape(-1, 26)
 
         self.sample_index = 0
         self.shard_index = (self.shard_index + 1) % len(self.files)
@@ -177,17 +81,12 @@ class NormalDataset:
         material = torch.tensor(batch[:, 0:8], dtype=torch.float32)
         wo = torch.tensor(batch[:, 8:11], dtype=torch.float32)
         v1 = torch.tensor(batch[:, 11:14], dtype=torch.float32)
-        v1Dist = torch.tensor(batch[:, 14:15], dtype=torch.float32)
-        v2 = torch.tensor(batch[:, 15:18], dtype=torch.float32)
-        v2Dist = torch.tensor(batch[:, 18:19], dtype=torch.float32)
-        v3 = torch.tensor(batch[:, 19:22], dtype=torch.float32)
-        v3Dist = torch.tensor(batch[:, 22:23], dtype=torch.float32)
-        v4 = torch.tensor(batch[:, 23:26], dtype=torch.float32)
-        v4Dist = torch.tensor(batch[:, 26:27], dtype=torch.float32)
-        area = torch.tensor(batch[:, 27:28], dtype=torch.float32)
-        D = torch.tensor(batch[:, 28:31], dtype=torch.float32)
+        v2 = torch.tensor(batch[:, 14:17], dtype=torch.float32)
+        v3 = torch.tensor(batch[:, 17:20], dtype=torch.float32)
+        v4 = torch.tensor(batch[:, 20:23], dtype=torch.float32)
+        D = torch.tensor(batch[:, 23:26], dtype=torch.float32)
 
-        return material, wo, v1, v1Dist, v2, v2Dist, v3, v3Dist, v4, v4Dist, area, D
+        return material, wo, v1, v2, v3, v4, D
 
 
 class SecondPhaseDataset:
@@ -234,7 +133,7 @@ class SecondPhaseDataset:
                 self.next_shard = np.fromfile(path, dtype=np.float16).reshape(
                     -1,
                     self.texture_total_pixel_size,
-                    23,
+                    18,
                 )
 
             self.prefetch_thread = threading.Thread(target=load)
@@ -252,7 +151,7 @@ class SecondPhaseDataset:
                 return
             path = self.shard_paths[self.shard_index]
             self.current_shard = np.fromfile(path, dtype=np.float16).reshape(
-                -1, self.texture_total_pixel_size, 23
+                -1, self.texture_total_pixel_size, 18
             )
 
         self.sample_index = 0
@@ -268,21 +167,16 @@ class SecondPhaseDataset:
             if self.current_shard is None:
                 raise StopIteration
 
-        sample = self.current_shard[self.sample_index]  # (N, 9)
-        wo = torch.tensor(sample[:, 0:3], dtype=torch.float32).unsqueeze(0)  # (1, N, 3)
-        v1 = torch.tensor(sample[:, 3:6], dtype=torch.float32).unsqueeze(0)  # (1, N, 3)
-        v1Dist = torch.tensor(sample[:, 6:7], dtype=torch.float32).unsqueeze(0)
-        v2 = torch.tensor(sample[:, 7:10], dtype=torch.float32).unsqueeze(0)
-        v2Dist = torch.tensor(sample[:, 10:11], dtype=torch.float32).unsqueeze(0)
-        v3 = torch.tensor(sample[:, 11:14], dtype=torch.float32).unsqueeze(0)
-        v3Dist = torch.tensor(sample[:, 14:15], dtype=torch.float32).unsqueeze(0)
-        v4 = torch.tensor(sample[:, 15:18], dtype=torch.float32).unsqueeze(0)
-        v4Dist = torch.tensor(sample[:, 18:19], dtype=torch.float32).unsqueeze(0)
-        area = torch.tensor(sample[:, 19:20], dtype=torch.float32).unsqueeze(0)
-        D = torch.tensor(sample[:, 20:23], dtype=torch.float32).unsqueeze(0)
+        sample = self.current_shard[self.sample_index]
+        wo = torch.tensor(sample[:, 0:3], dtype=torch.float32).unsqueeze(0)
+        v1 = torch.tensor(sample[:, 3:6], dtype=torch.float32).unsqueeze(0)
+        v2 = torch.tensor(sample[:, 6:9], dtype=torch.float32).unsqueeze(0)
+        v3 = torch.tensor(sample[:, 9:12], dtype=torch.float32).unsqueeze(0)
+        v4 = torch.tensor(sample[:, 12:15], dtype=torch.float32).unsqueeze(0)
+        D = torch.tensor(sample[:, 15:18], dtype=torch.float32).unsqueeze(0)
 
         self.sample_index += 1
-        return wo, v1, v1Dist, v2, v2Dist, v3, v3Dist, v4, v4Dist, area, D
+        return wo, v1, v2, v3, v4, D
 
 
 class Encoder(nn.Module):
@@ -337,23 +231,27 @@ class Decoder(nn.Module):
         super().__init__()
 
         self.fc1 = nn.Linear(8, 12)
-        self.fc2 = nn.Linear(8 + 30 + 4 + 1, 64)
+        self.fc2 = nn.Linear(8 + 30, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 64)
-        self.fc5 = nn.Linear(64, 3)
+        self.fc5 = nn.Linear(64, 64)
+        self.fc6 = nn.Linear(64, 64)
+        self.fc7 = nn.Linear(64, 64)
+        self.fc8 = nn.Linear(64, 3)
         self.tanh = nn.Tanh()
         self.relu = nn.ReLU()
 
-    def forward(self, latent, wo, v1, v1Dist, v2, v2Dist, v3, v3Dist, v4, v4Dist, area):
+    def forward(self, latent, wo, v1, v2, v3, v4):
         tf_input = self.tanh(self.fc1(latent))  # (B, 12)
         tf_output = transform_frame_function(tf_input, wo, v1, v2, v3, v4)  # (B, 30)
-        x = torch.cat(
-            [latent, tf_output, v1Dist, v2Dist, v3Dist, v4Dist, area],
-            dim=-1)  # (B, 43)
+        x = torch.cat([latent, tf_output], dim=-1)  # (B, 38)
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
-        return torch.exp(self.fc5(x) - 3.0)  # (B, 3)
+        x = self.relu(self.fc5(x))
+        x = self.relu(self.fc6(x))
+        x = self.relu(self.fc7(x))
+        return torch.exp(self.fc8(x) - 3.0)  # (B, 3)
 
 
 def log1p4(x):
@@ -411,6 +309,9 @@ def save_model_as_json(model, path):
                 layer_to_json(model.fc3),
                 layer_to_json(model.fc4),
                 layer_to_json(model.fc5),
+                layer_to_json(model.fc6),
+                layer_to_json(model.fc7),
+                layer_to_json(model.fc8),
             ],
         }
     }
@@ -420,14 +321,6 @@ def save_model_as_json(model, path):
     os.makedirs(parent_dir, exist_ok=True)
     with open(path, "w") as f:
         json.dump(model_json, f, indent=2)
-
-
-def log1p4(x):
-    x = torch.log1p(x)
-    x = torch.log1p(x)
-    x = torch.log1p(x)
-    x = torch.log1p(x)
-    return x
 
 
 def train_first_phase(
@@ -443,33 +336,31 @@ def train_first_phase(
     )
     loss_fn = nn.L1Loss()
 
-    mollified_data = MollifiedDataset(data_dir, num_steps=num_steps // 15)
+    # mollified_data = MollifiedDataset(data_dir, num_steps=num_steps // 15)
     normal_data = NormalDataset(data_dir)
 
-    data = iter(mollified_data)
-    for i in range(100):
-        next(data)
-
-    data = iter(mollified_data)
-    phase = "mollified"
+    # data = iter(mollified_data)
+    data = iter(normal_data)
 
     for step in tqdm(range(num_steps), desc="First Phase Training"):
         try:
-            material, wi, wo, brdf = next(data)
+            material, wo, v1, v2, v3, v4, D = next(data)
         except StopIteration:
             data = iter(normal_data)
-            material, wi, wo, brdf = next(data)
+            material, wo, v1, v2, v3, v4, D = next(data)
 
         material = material.to(device)
-        wi = wi.to(device)
         wo = wo.to(device)
-        brdf = brdf.to(device)
-        brdf_log = log1p4(brdf)
+        v1 = v1.to(device)
+        v2 = v2.to(device)
+        v3 = v3.to(device)
+        v4 = v4.to(device)
+        D = D.to(device)
 
         latent = encoder(material)
-        pred = decoder(latent, wi, wo)
-        pred_log = log1p4(pred)
-        loss = loss_fn(pred_log, brdf_log)
+        pred = decoder(latent, wo, v1, v2, v3, v4)
+        pred_log = torch.log1p(pred)
+        loss = loss_fn(pred_log, D)
 
         optimizer.zero_grad()
         loss.backward()
@@ -478,11 +369,21 @@ def train_first_phase(
 
         if step % log_interval == 0 or step == num_steps - 1:
             # Log to Weights & Biases
+            # D_mean = D.mean().item()
+            # D_var = D.var().item()
+            # DD = torch.exp(D) - 1.0
+            # DD_max = DD.max().item()
+            # DD_mean = DD.mean().item()
+            # DD_var = DD.var().item()
             wandb.log(
                 {
                     "step": step,
                     "1st phase/loss": loss.item(),
-                    "phase": phase,
+                    # "1st phase/D_mean": D_mean,
+                    # "1st phase/D_var": D_var,
+                    # "1st phase/DD_max": DD_max,
+                    # "1st phase/DD_mean": DD_mean,
+                    # "1st phase/DD_var": DD_var,
                 }
             )
 
@@ -603,21 +504,23 @@ def train_second_phase(
 
     for step in tqdm(range(num_steps), desc="Second Phase Training"):
         try:
-            wi, wo, brdf = next(data)
+            wo, v1, v2, v3, v4, D = next(data)
         except StopIteration:
             data = iter(second_data)
-            wi, wo, brdf = next(data)
+            wo, v1, v2, v3, v4, D = next(data)
 
-        wi = wi.squeeze(0).to(device)  # (N, 3)
-        wo = wo.squeeze(0).to(device)  # (N, 3)
-        brdf = brdf.squeeze(0).to(device)  # (N, 3)
-        brdf_log = log1p4(brdf)
+        wo = wo.squeeze(0).to(device)
+        v1 = v1.squeeze(0).to(device)
+        v2 = v2.squeeze(0).to(device)
+        v3 = v3.squeeze(0).to(device)
+        v4 = v4.squeeze(0).to(device)
+        D = D.squeeze(0).to(device)
 
-        latent = latent_texture  # (N, 8)
+        latent = latent_texture
 
-        pred = decoder(latent, wi, wo)  # (N, 3)
-        pred_log = log1p4(pred)
-        loss = loss_fn(pred_log, brdf_log)
+        pred = decoder(latent, wo, v1, v2, v3, v4)
+        pred_log = torch.log1p(pred)
+        loss = loss_fn(pred_log, D)
 
         optimizer.zero_grad()
         loss.backward()
@@ -626,10 +529,21 @@ def train_second_phase(
 
         if step % log_interval == 0:
             # Log to Weights & Biases
+            # D_mean = D.mean().item()
+            # D_var = D.var().item()
+            # DD = torch.exp(D) - 1.0
+            # DD_max = DD.max().item()
+            # DD_mean = DD.mean().item()
+            # DD_var = DD.var().item()
             wandb.log(
                 {
                     "step": step,
                     "2nd phase/loss": loss.item(),
+                    # "2nd phase/D_mean": D_mean,
+                    # "2nd phase/D_var": D_var,
+                    # "2nd phase/DD_max": DD_max,
+                    # "2nd phase/DD_mean": DD_mean,
+                    # "2nd phase/DD_var": DD_var,
                 }
             )
 

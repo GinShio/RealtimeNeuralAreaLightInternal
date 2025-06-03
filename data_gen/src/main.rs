@@ -61,7 +61,6 @@ fn main() -> Result<()> {
                 args.texture_size,
                 args.batch_size,
                 args.first_phase_shard_size,
-                args.first_phase_shard_count / 15,
                 args.first_phase_shard_count,
                 args.second_phase_shard_size,
                 args.second_phase_shard_count,

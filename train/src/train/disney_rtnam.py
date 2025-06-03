@@ -414,10 +414,6 @@ def train_first_phase(
     normal_data = NormalDataset(data_dir)
 
     data = iter(mollified_data)
-    for i in range(100):
-        next(data)
-
-    data = iter(mollified_data)
     phase = "mollified"
 
     for step in tqdm(range(num_steps), desc="First Phase Training"):
