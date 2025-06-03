@@ -559,9 +559,9 @@ def train_second_phase(
     decoder = Decoder().to(device)
     decoder.load_state_dict(torch.load(os.path.join(output_dir, "decoder.pth")))
     optimizer = torch.optim.Adam(list(decoder.parameters()) + [latent_texture], lr=lr)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    #     optimizer, T_max=num_steps, eta_min= lr / 10
-    # )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=num_steps, eta_min= lr / 10
+    )
     loss_fn = nn.L1Loss()
 
     second_data = SecondPhaseDataset(data_dir)
@@ -587,7 +587,7 @@ def train_second_phase(
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        # scheduler.step()
+        scheduler.step()
 
         if step % log_interval == 0:
             # Log to Weights & Biases
