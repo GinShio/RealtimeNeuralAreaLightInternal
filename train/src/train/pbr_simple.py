@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import IterableDataset, DataLoader
 import json
@@ -365,14 +366,17 @@ def train_first_phase(
         v4 = v4.to(device)
         D = D.to(device)
 
+        print(v1.shape)
+
         latent = encoder(material)
         pred = decoder(
             latent,
             wo,
-            v1.normalize(p=2, dim=-1),
-            v2.normalize(p=2, dim=-1),
-            v3.normalize(p=2, dim=-1),
-            v4.normalize(p=2, dim=-1))
+            F.normalize(v1, p=2, dim=-1),
+            F.normalize(v2, p=2, dim=-1),
+            F.normalize(v3, p=2, dim=-1),
+            F.normalize(v4, p=2, dim=-1),
+        )
         pred_log = log1p4(pred)
         loss = loss_fn(pred_log, D)
 
@@ -524,10 +528,11 @@ def train_second_phase(
         pred = decoder(
             latent,
             wo,
-            v1.normalize(p=2, dim=-1),
-            v2.normalize(p=2, dim=-1),
-            v3.normalize(p=2, dim=-1),
-            v4.normalize(p=2, dim=-1))
+            F.normalize(v1, p=2, dim=-1),
+            F.normalize(v2, p=2, dim=-1),
+            F.normalize(v3, p=2, dim=-1),
+            F.normalize(v4, p=2, dim=-1),
+        )
         pred_log = log1p4(pred)
         loss = loss_fn(pred_log, D)
 

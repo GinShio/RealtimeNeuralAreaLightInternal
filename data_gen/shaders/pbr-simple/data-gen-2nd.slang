@@ -120,7 +120,7 @@ func computeDistribution(
 
         let wi = normalize(lightPos);
         let NdotL = saturate(dot(normal, wi));
-        let LnDotWi = saturate(abs(dot(lightNormal, -wi)));
+        let LnDotWi = abs(dot(lightNormal, -wi));
 
         let distanceSquared = dot(lightPos, lightPos);
         let G = (NdotL * LnDotWi) / (distanceSquared + 1e-5);
@@ -180,30 +180,14 @@ void main(uint3 tid: SV_DispatchThreadID)
     sampleDirection(rng, wi, v1, v2, v3, v4);
 
     // compute D
-    float3 D;
-    if (rng.nextFloat() < 0.5)
-    {
-        D = computeDistribution(
-            rng,
-            baseColor,
-            roughness,
-            metallic,
-            normal,
-            wo,
-            v1, v2, v3, v4);
-    }
-    else
-    {
-
-        D = computeDistribution(
-            rng,
-            baseColor,
-            roughness,
-            metallic,
-            normal,
-            wo,
-            v4, v3, v2, v1);
-    }
+    let D = computeDistribution(
+        rng,
+        baseColor,
+        roughness,
+        metallic,
+        normal,
+        wo,
+        v1, v2, v3, v4);
 
     // Save training data
     let index = i * 18;

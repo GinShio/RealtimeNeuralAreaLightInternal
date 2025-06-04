@@ -157,7 +157,6 @@ func computeDistribution(
 
         let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
         let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
-        // let roughness = 0.01;
         let metallic = metallicSampler.SampleLevel(uv_modify, mipLevelFloor).r;
         var normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
         normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
@@ -173,7 +172,7 @@ func computeDistribution(
 
         let wi = normalize(lightPos);
         let NdotL = saturate(dot(normal, wi));
-        let LnDotWi = saturate(abs(dot(lightNormal, -wi)));
+        let LnDotWi = abs(dot(lightNormal, -wi));
 
         let distanceSquared = dot(lightPos, lightPos);
         let G = (NdotL * LnDotWi) / max(distanceSquared, 1e-5);
@@ -233,26 +232,12 @@ void main(uint3 tid: SV_DispatchThreadID)
     sampleDirection(rng, wi, v1, v2, v3, v4);
 
     // compute D
-    float3 D;
-    if (rng.nextFloat() < 0.5)
-    {
-        D = computeDistribution(
-            rng,
-            uv,
-            wo,
-            v1, v2, v3, v4,
-            mipLevel);
-    }
-    else
-    {
-
-        D = computeDistribution(
-            rng,
-            uv,
-            wo,
-            v4, v3, v2, v1,
-            mipLevel);
-    }
+    let D = computeDistribution(
+        rng,
+        uv,
+        wo,
+        v1, v2, v3, v4,
+        mipLevel);
 
     // Save training data
     let index = i * 26;

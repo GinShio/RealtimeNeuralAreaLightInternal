@@ -88,7 +88,6 @@ void main(uint3 tid: SV_DispatchThreadID)
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
     let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    // let roughness = 0.01;
     let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map

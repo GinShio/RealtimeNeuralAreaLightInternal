@@ -138,4 +138,16 @@ func sampleDirection(
     v2 = Q2 / maxLength;
     v3 = Q3 / maxLength;
     v4 = Q4 / maxLength;
+
+    // ─────────────────────────────────────────────────────────────
+    // 6) ランダムで逆順に並べ替える
+    if (rng.nextFloat() < 0.5f)
+    {
+        float3 temp = v1;
+        v1 = v3;
+        v3 = temp;
+        temp = v2;
+        v2 = v4;
+        v4 = temp;
+    }
 }
