@@ -173,41 +173,51 @@ public struct Network
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 4th layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            decoderParameters,
-            uint2(weightOffsets[4], biasOffsets[4]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
+        // // decoder 4th layer
+        // hidden = LinearOp<half, 64, 64>(
+        //     hidden,
+        //     decoderParameters,
+        //     uint2(weightOffsets[4], biasOffsets[4]),
+        //     matrixLayout,
+        //     componentType);
+        // hidden = act.eval(hidden);
 
-        // decoder 5th layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            decoderParameters,
-            uint2(weightOffsets[5], biasOffsets[5]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
+        // // decoder 5th layer
+        // hidden = LinearOp<half, 64, 64>(
+        //     hidden,
+        //     decoderParameters,
+        //     uint2(weightOffsets[5], biasOffsets[5]),
+        //     matrixLayout,
+        //     componentType);
+        // hidden = act.eval(hidden);
 
-        // decoder 6th layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
-            decoderParameters,
-            uint2(weightOffsets[6], biasOffsets[6]),
-            matrixLayout,
-            componentType);
-        hidden = act.eval(hidden);
+        // // decoder 6th layer
+        // hidden = LinearOp<half, 64, 64>(
+        //     hidden,
+        //     decoderParameters,
+        //     uint2(weightOffsets[6], biasOffsets[6]),
+        //     matrixLayout,
+        //     componentType);
+        // hidden = act.eval(hidden);
+
+        // // decoder 7th layer
+        // output = LinearOp<half, 3, 64>(
+        //     hidden,
+        //     decoderParameters,
+        //     uint2(weightOffsets[7], biasOffsets[7]),
+        //     matrixLayout,
+        //     componentType);
+        // output = decoderFinalAct.eval(output - CoopVec<half, 3>(3.0, 3.0, 3.0));
 
         // decoder 4th layer
         output = LinearOp<half, 3, 64>(
             hidden,
             decoderParameters,
-            uint2(weightOffsets[7], biasOffsets[7]),
+            uint2(weightOffsets[4], biasOffsets[4]),
             matrixLayout,
             componentType);
         output = decoderFinalAct.eval(output - CoopVec<half, 3>(3.0, 3.0, 3.0));
+
         [unroll]
         for (var i = 0; i < 3; i++)
         {

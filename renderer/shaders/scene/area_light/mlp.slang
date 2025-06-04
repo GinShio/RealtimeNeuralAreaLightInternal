@@ -13,6 +13,8 @@ import "../../rtxns/Utils";
 import "network";
 import "modify-vertices";
 
+import "brdf";
+
 using namespace rtxns;
 using namespace rtxns::mlp;
 
@@ -245,6 +247,16 @@ func fsMain(input: VertexOutput)->FragmentOutput
         let D = float3(output[0], output[1], output[2]);
         let lightColor = srgbToLinear(light.color);
         color += D * lightColor * light.intensity;
+
+        // let lightPosition = light.position;
+        // let lightViewPosition = mul(uniforms.view, float4(lightPosition, 1.0)).xyz;
+        // let lightDirection = normalize(lightViewPosition - input.viewPosition);
+        // let Lt = mul(TBN, lightDirection);
+
+        // let distance = length(lightViewPosition - input.viewPosition);
+        // let attenuation = 1.0 / (distance * distance);
+
+        // color += PbrBRDF(float3(1, 1, 0.1), 0.05, 0.0, Nt, Vt, Lt) * max(dot(Nt, Lt), 0.0) * light.color * light.intensity * attenuation;
     }
 
     return {

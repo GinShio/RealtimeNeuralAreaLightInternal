@@ -105,7 +105,7 @@ pub fn create_graphics_pipeline(
         .max_depth_bounds(1.0);
 
     // Create pipeline rendering create info
-    let rendering_formats = [vk::Format::R8G8B8A8_UNORM];
+    let rendering_formats = [vk::Format::R32G32B32A32_SFLOAT];
     let mut pipeline_rendering = vk::PipelineRenderingCreateInfo::default()
         .color_attachment_formats(&rendering_formats)
         .depth_attachment_format(vk::Format::D24_UNORM_S8_UINT);

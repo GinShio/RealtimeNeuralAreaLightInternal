@@ -235,10 +235,7 @@ class Decoder(nn.Module):
         self.fc2 = nn.Linear(8 + 30, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 64)
-        self.fc5 = nn.Linear(64, 64)
-        self.fc6 = nn.Linear(64, 64)
-        self.fc7 = nn.Linear(64, 64)
-        self.fc8 = nn.Linear(64, 3)
+        self.fc5 = nn.Linear(64, 3)
         self.tanh = nn.Tanh()
         self.relu = nn.ReLU()
 
@@ -249,10 +246,7 @@ class Decoder(nn.Module):
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
-        x = self.relu(self.fc5(x))
-        x = self.relu(self.fc6(x))
-        x = self.relu(self.fc7(x))
-        return torch.exp(self.fc8(x) - 3.0) / 10.0  # (B, 3)
+        return torch.exp(self.fc5(x) - 3.0) / 10.0  # (B, 3)
 
 
 def log1p4(x):
@@ -310,9 +304,6 @@ def save_model_as_json(model, path):
                 layer_to_json(model.fc3),
                 layer_to_json(model.fc4),
                 layer_to_json(model.fc5),
-                layer_to_json(model.fc6),
-                layer_to_json(model.fc7),
-                layer_to_json(model.fc8),
             ],
         }
     }
@@ -632,7 +623,7 @@ def train(steps):
     output_dir = "output/pbr-simple"
 
     lr_first = 1e-3
-    lr_second = 1e-3
+    lr_second = 1e-4
 
     config = {
         "steps": steps,
