@@ -42,17 +42,17 @@ public func PbrBRDF(
     // Geometric shadowing (Smith's method)
     let alpha = roughness * roughness;
 
-    let G1V = NdotV / max(NdotV * (1.0 - alpha) + alpha, 1e-5);
-    let G1L = NdotL / max(NdotL * (1.0 - alpha) + alpha, 1e-5);
+    let G1V = NdotV / max(NdotV * (1.0 - alpha) + alpha, 1e-16);
+    let G1L = NdotL / max(NdotL * (1.0 - alpha) + alpha, 1e-16);
     let G = G1V * G1L;
 
     // GGX normal distribution
     let alpha2 = alpha * alpha;
     let denom = (NdotH * NdotH) * (alpha2 - 1.0) + 1.0;
-    let D = alpha2 / (PI * denom * denom + 1e-5);
+    let D = alpha2 / max(PI * denom * denom, 1e-16);
 
     // Cook-Torrance specular brdf
-    let specular = (D * G * F) / max(4.0 * NdotL * NdotV, 1e-5);
+    let specular = (D * G * F) / max(4.0 * NdotL * NdotV, 1e-16);
 
     // === diffuse ===
 

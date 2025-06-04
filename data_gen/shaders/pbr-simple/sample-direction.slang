@@ -24,7 +24,7 @@ static const float kLogAspectMax = log(kAspectMax);
 static const float kAspectMax = 16.0f;
 
 // 面法線と中心方向 w の最大傾斜角（台形化の強さ）
-static const float kTiltMaxDeg = 60.0f;
+static const float kTiltMaxDeg = 180.0f;
 static const float kTiltMaxRad = kTiltMaxDeg * kDegToRad;
 
 // ────────────── 補助関数 ───────────────────────────────────────────
@@ -144,10 +144,10 @@ func sampleDirection(
     if (rng.nextFloat() < 0.5f)
     {
         float3 temp = v1;
-        v1 = v3;
-        v3 = temp;
-        temp = v2;
-        v2 = v4;
+        v1 = v4;
         v4 = temp;
+        temp = v2;
+        v2 = v3;
+        v3 = temp;
     }
 }
