@@ -452,7 +452,7 @@ def train_second_phase(
     data_dir,
     output_dir,
     num_steps=1000,
-    lr=1e-4,
+    lr=1e-3,
     log_interval=100,
     save_interval=10000,
     device="cuda",

@@ -176,14 +176,30 @@ void main(uint3 tid: SV_DispatchThreadID)
     sampleDirection(rng, wi, v1, v2, v3, v4);
 
     // compute D
-    let D = computeDistribution(
-        rng,
-        baseColor,
-        roughness,
-        metallic,
-        normal,
-        wo,
-        v1, v2, v3, v4);
+    float3 D;
+    if (rng.nextFloat() < 0.5)
+    {
+        D = computeDistribution(
+            rng,
+            baseColor,
+            roughness,
+            metallic,
+            normal,
+            wo,
+            v1, v2, v3, v4);
+    }
+    else
+    {
+
+        D = computeDistribution(
+            rng,
+            baseColor,
+            roughness,
+            metallic,
+            normal,
+            wo,
+            v4, v3, v2, v1);
+    }
 
     // Save training data
     let index = i * 18;

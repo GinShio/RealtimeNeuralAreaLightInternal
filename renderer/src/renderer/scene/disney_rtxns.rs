@@ -279,6 +279,7 @@ impl DisneyRtxnsScene {
                     size: std::mem::size_of::<PushConstants>() as u32,
                 }],
                 &[network_descriptor_set_layout, uniform_descriptor_set_layout],
+                true,
             )?
         };
         let (pipeline_layout_analytic, pipeline_analytic) = {
@@ -299,6 +300,7 @@ impl DisneyRtxnsScene {
                     size: std::mem::size_of::<PushConstants>() as u32,
                 }],
                 &[network_descriptor_set_layout, uniform_descriptor_set_layout],
+                true,
             )?
         };
         let (pipeline_layout_diff, pipeline_diff) = {
@@ -319,6 +321,7 @@ impl DisneyRtxnsScene {
                     size: std::mem::size_of::<PushConstants>() as u32,
                 }],
                 &[network_descriptor_set_layout, uniform_descriptor_set_layout],
+                true,
             )?
         };
 

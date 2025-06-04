@@ -113,33 +113,6 @@ func srgbToLinear(color: float3)->float3
     return select(useLinear, v1, v2);
 }
 
-func rotationMatrixFromEuler(euler: float3)->float3x3
-{
-    let cx = cos(euler.x);
-    let sx = sin(euler.x);
-    let cy = cos(euler.y);
-    let sy = sin(euler.y);
-    let cz = cos(euler.z);
-    let sz = sin(euler.z);
-
-    let rotX = float3x3(
-        1.0, 0.0, 0.0,
-        0.0, cx, -sx,
-        0.0, sx, cx);
-
-    let rotY = float3x3(
-        cy, 0.0, sy,
-        0.0, 1.0, 0.0,
-        -sy, 0.0, cy);
-
-    let rotZ = float3x3(
-        cz, -sz, 0.0,
-        sz, cz, 0.0,
-        0.0, 0.0, 1.0);
-
-    return mul(rotY, mul(rotX, rotZ));
-}
-
 func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
 {
     let levelWidth = uniforms.textureSize / exp2(mipLevel);
@@ -183,7 +156,8 @@ func computeDistribution(
         let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
-        let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        // let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        let roughness = 0.01;
         let metallic = metallicSampler.SampleLevel(uv_modify, mipLevelFloor).r;
         var normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
         normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
@@ -240,7 +214,8 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    let roughness = 0.01;
     let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
@@ -252,12 +227,26 @@ void main(uint3 tid: SV_DispatchThreadID)
     sampleDirection(rng, wi, v1, v2, v3, v4);
 
     // compute D
-    let D = computeDistribution(
-        rng,
-        uv,
-        wo,
-        v1, v2, v3, v4,
-        mipLevel);
+    float3 D;
+    if (rng.nextFloat() < 0.5)
+    {
+        D = computeDistribution(
+            rng,
+            uv,
+            wo,
+            v1, v2, v3, v4,
+            mipLevel);
+    }
+    else
+    {
+
+        D = computeDistribution(
+            rng,
+            uv,
+            wo,
+            v4, v3, v2, v1,
+            mipLevel);
+    }
 
     // Save training data
     let index = i * 26;

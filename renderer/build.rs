@@ -171,6 +171,30 @@ fn main() {
             "fragment",
             "fsMain",
         ),
+        (
+            "scene/area_light/mlp.slang",
+            "scene/area_light/mlp.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/area_light/mlp.slang",
+            "scene/area_light/mlp.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
+        (
+            "scene/area_light/light.slang",
+            "scene/area_light/light.vert.spv",
+            "vertex",
+            "vsMain",
+        ),
+        (
+            "scene/area_light/light.slang",
+            "scene/area_light/light.frag.spv",
+            "fragment",
+            "fsMain",
+        ),
     ];
 
     // Watch all .slang files in the shader directory

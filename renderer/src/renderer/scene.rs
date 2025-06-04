@@ -4,11 +4,13 @@ use crate::renderer::{
     render_images::RenderImages, texture_manager::TextureManager, vulkan_state::VulkanState,
 };
 
+mod area_light;
 mod damaged_helmet;
 mod disney_rtnam;
 mod disney_rtxns;
 mod triangle;
 
+pub use area_light::AreaLightScene;
 pub use damaged_helmet::DamagedHelmetScene;
 pub use disney_rtnam::DisneyRtnamScene;
 pub use disney_rtxns::DisneyRtxnsScene;

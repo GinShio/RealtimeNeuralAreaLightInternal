@@ -67,6 +67,7 @@ impl Renderer {
             scene::DamagedHelmetScene::new(&mut state, &mut texture_manager)?,
             scene::DisneyRtxnsScene::new(&mut state, &mut texture_manager)?,
             scene::DisneyRtnamScene::new(&mut state, &mut texture_manager)?,
+            scene::AreaLightScene::new(&mut state, &mut texture_manager)?,
         ];
 
         // Create pass

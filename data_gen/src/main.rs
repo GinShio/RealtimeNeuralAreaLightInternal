@@ -14,13 +14,13 @@ struct Args {
     texture_size: u32,
     #[arg(short, long, default_value_t = 65536)]
     batch_size: u64,
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value_t = 1)]
     first_phase_shard_size: u64,
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value_t = 30000)]
     first_phase_shard_count: u64,
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 1)]
     second_phase_shard_size: u64,
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value_t = 3000)]
     second_phase_shard_count: u64,
 }
 

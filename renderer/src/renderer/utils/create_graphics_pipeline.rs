@@ -12,6 +12,7 @@ pub fn create_graphics_pipeline(
     fragment_shader: &[u8],
     push_constant_ranges: &[vk::PushConstantRange],
     descriptor_set_layouts: &[vk::DescriptorSetLayout],
+    cull_back: bool,
 ) -> Result<(vk::PipelineLayout, vk::Pipeline)> {
     // Create shader stage create infos
     let vertex_shader_module = {
@@ -65,7 +66,11 @@ pub fn create_graphics_pipeline(
     // Create rasterization state create info
     let rasterization_state = vk::PipelineRasterizationStateCreateInfo::default()
         .polygon_mode(vk::PolygonMode::FILL)
-        .cull_mode(vk::CullModeFlags::BACK)
+        .cull_mode(if cull_back {
+            vk::CullModeFlags::BACK
+        } else {
+            vk::CullModeFlags::NONE
+        })
         .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
         .line_width(1.0);
 
