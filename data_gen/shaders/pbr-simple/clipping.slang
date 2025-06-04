@@ -44,6 +44,7 @@ func triangulatePolygon(
     if (count < 3)
     {
         triCount = 0;
+        triangles = { Triangle(), Triangle(), Triangle() };
         return;
     }
     triCount = count - 2;
@@ -91,6 +92,32 @@ public struct Triangle
     {
         return v0 * bary.x + v1 * bary.y + v2 * bary.z;
     }
+
+    public func hit(v: float3, out hitPos: float3, out hitNormal: float3)->bool
+    {
+        hitPos = float3(0.0, 0.0, 0.0);
+        hitNormal = float3(0.0, 0.0, 0.0);
+
+        let v2 = dot(v, cross(v1, v0));
+        let v1 = dot(v, cross(v0, v2));
+        let v0 = dot(v, cross(v2, v1));
+
+        if (v0 < 0.0 || v1 < 0.0 || v2 < 0.0)
+        {
+            // 三角形の外側にある
+            return false;
+        }
+
+        let v = v0 + v1 + v2;
+        if (v < 1e-5)
+        {
+            // 面に平行
+            return false;
+        }
+
+        hitPos = barycentricToPosition(float3(v0, v1, v2) / v);
+        hitNormal = normal();
+    }
 };
 
 public struct WeightedTriangles
@@ -100,7 +127,7 @@ public struct WeightedTriangles
     public float totalArea;
     public int triCount;
 
-    public func sample(inout rng: PCG32)->Triangle
+    public func sampleTriangle(inout rng: PCG32)->Triangle
     {
         float r = rng.nextFloat();
         float acc = 0.0;
@@ -154,5 +181,26 @@ public struct WeightedTriangles
         result.triCount = triCount;
 
         return result;
+    }
+
+    public func hit(v: float3, out float3 hitPos, out hitNormal: float3)->bool
+    {
+        hitPos = float3(0.0, 0.0, 0.0);
+        hitNormal = float3(0.0, 0.0, 0.0);
+
+        if (totalArea <= 0.0)
+        {
+            return false;
+        }
+        const float3 dir = normalize(v);
+        for (int i = 0; i < triCount; ++i)
+        {
+            if (triangles[i].hit(dir, hitPos, hitNormal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 };

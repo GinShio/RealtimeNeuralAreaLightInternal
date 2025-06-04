@@ -96,37 +96,93 @@ func computeDistribution(
 {
     const uint ITERATIONS = 1024;
 
+    let N = normalize(normal);
+
     float3 D = float3(0.0, 0.0, 0.0);
 
+    // クリッピング & 三角形分割
     let wt = WeightedTriangles.clipAndTriangulateQuad(v1, v2, v3, v4);
+    if (wt.triCount == 0 || wt.totalArea <= 0.0)
+        return D; // 発光面が見えない
 
-    if (wt.triCount == 0)
-    {
-        return D; // No triangles to sample from
-    }
-
+    // ────────────────────────────────────────────────────────────────
+    // メインループ：各イテレーションで
+    //   ① 面光源サンプル（面積領域）
+    //   ② BRDF サンプル（立体角領域）
+    // の二手法を評価し、バランスヒューリスティックで MIS 合成する。
+    // ────────────────────────────────────────────────────────────────
     for (uint i = 0; i < ITERATIONS; ++i)
     {
-
-        let u = rng.nextFloat();
-        let v = rng.nextFloat();
-
-        let triangle = wt.sample(rng);
-        let bary = triangle.randomBarycentric(rng);
-        let lightPos = triangle.barycentricToPosition(bary);
-        let lightNormal = triangle.normal();
-
-        let wi = normalize(lightPos);
-        let NdotL = saturate(dot(normal, wi));
-        let LnDotWi = abs(dot(lightNormal, -wi));
-
-        let distanceSquared = dot(lightPos, lightPos);
-        let G = (NdotL * LnDotWi) / max(distanceSquared, 1e-16);
-
-        if (G > 0.0)
+        // ────────────────────────────────────────────────────────────
+        // ① 面光源サンプリング  (面積領域)
+        // ────────────────────────────────────────────────────────────
         {
-            let brdf = PbrBRDF(baseColor, roughness, metallic, normal, wo, wi);
-            D += brdf * G * wt.totalArea;
+            Triangle tri = wt.sampleTriangle(rng);
+            float3 bary = tri.randomBarycentric(rng);
+            float3 Lpos = tri.barycentricToPosition(bary); // ライト頂点
+            float3 Ln = tri.normal();
+
+            float3 wi = normalize(Lpos);
+            float NdotL = saturate(dot(N, wi));
+            float LnDotWi = abs(dot(Ln, -wi));
+            float dist2 = dot(Lpos, Lpos);
+
+            let G = (NdotL * LnDotWi) / max(dist2, 1e-16);
+
+            if (G > 0.0)
+            {
+                let brdf = PbrBRDF(baseColor, roughness, metallic, N, wo, wi);
+
+                let pdfLightArea = 1.0 / wt.totalArea;
+
+                let pdfBrdfSolid = PdfPbrBRDF(baseColor, roughness, metallic, N, wo, wi);
+                let pdfBrdfArea = pdfBrdfSolid * LnDotWi / max(dist2, 1e-16);
+
+                let wLight = pdfLightArea /
+                             max(pdfLightArea + pdfBrdfArea, 1e-16);
+
+                D += brdf * G * wt.totalArea * wLight;
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // ② BRDF サンプリング  (立体角領域)
+        // ────────────────────────────────────────────────────────────
+        {
+            float pdfBrdfSolid;
+            float3 wi;
+            SamplePbrBRDF(
+                rng,
+                baseColor,
+                roughness,
+                metallic,
+                N,
+                wo,
+                wi,
+                pdfBrdfSolid);
+
+            if (pdfBrdfSolid > 0.0)
+            {
+                float3 Lpos;
+                float3 Ln;
+
+                if (wt.hit(wi, Lpos, Ln))
+                {
+                    let dist2 = dot(Lpos, Lpos);
+                    let LnDotWi = abs(dot(Ln, -wi));
+                    let brdf = PbrBRDF(baseColor, roughness, metallic, N, wo, wi);
+
+                    let pdfLightArea = 1.0 / wt.totalArea;
+                    let pdfBrdfArea = pdfBrdfSolid * LnDotWi / max(dist2, 1e-16);
+
+                    float wBrdf = pdfBrdfArea /
+                                  max(pdfBrdfArea + pdfLightArea, 1e-16);
+
+                    float NdotL = saturate(dot(N, wi));
+
+                    D += brdf * NdotL / max(pdfBrdfSolid, 1e-16) * wBrdf;
+                }
+            }
         }
     }
 

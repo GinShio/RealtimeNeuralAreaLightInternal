@@ -128,61 +128,119 @@ func addGaussianOffset(inout rng: PCG32, uv: float2, mipLevel: float)->float2
 func computeDistribution(
     inout rng: PCG32,
     uv: float2,
+    mipLevel: float,
     wo: float3,
     v1: float3,
     v2: float3,
     v3: float3,
-    v4: float3,
-    mipLevel: float)
+    v4: float3)
     ->float3
 {
-    const uint ITERATIONS = 1024;
-
+    // ────────────────────────────────────────────────────────────────
+    const uint ITERATIONS = 1024; // 各手法で 1024 サンプル
+    // ────────────────────────────────────────────────────────────────
     let mipLevelFloor = floor(mipLevel);
 
     float3 D = float3(0.0, 0.0, 0.0);
 
+    // クリッピング & 三角形分割
     let wt = WeightedTriangles.clipAndTriangulateQuad(v1, v2, v3, v4);
-
-    if (wt.triCount == 0)
+    if (wt.triCount == 0 || wt.totalArea <= 0.0)
     {
-        return D; // No triangles to sample from
+        return D; // 発光面が見えない
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // メインループ：各イテレーションで
+    //   ① 面光源サンプル（面積領域）
+    //   ② BRDF サンプル（立体角領域）
+    // の二手法を評価し、バランスヒューリスティックで MIS 合成する。
+    // ────────────────────────────────────────────────────────────────
     for (uint i = 0; i < ITERATIONS; ++i)
     {
-        let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
+        // ────── マテリアル取得（両手法共通で使う） ──────
+        let uvM = addGaussianOffset(rng, uv, mipLevelFloor);
 
-        let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
-        // let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uvM, mipLevelFloor).rgb);
+        // let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
+        // let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
         let roughness = 0.001;
-        // let metallic = metallicSampler.SampleLevel(uv_modify, mipLevelFloor).r;
         let metallic = 1.0;
-        var normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
-        normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
-        normal = normal * 2 - 1;
 
-        let u = rng.nextFloat();
-        let v = rng.nextFloat();
+        var normalTex = normalSampler.SampleLevel(uvM, mipLevelFloor).xyz;
+        normalTex.y = 1.0 - normalTex.y; // Y 反転
+        let N = normalize(normalTex * 2.0 - 1.0);
 
-        let triangle = wt.sample(rng);
-        let bary = triangle.randomBarycentric(rng);
-        let lightPos = triangle.barycentricToPosition(bary);
-        let lightNormal = triangle.normal();
-
-        let wi = normalize(lightPos);
-        let NdotL = saturate(dot(normal, wi));
-        let LnDotWi = abs(dot(lightNormal, -wi));
-
-        let distanceSquared = dot(lightPos, lightPos);
-        let G = (NdotL * LnDotWi) / max(distanceSquared, 1e-16);
-
-        if (G > 0.0)
+        // ────────────────────────────────────────────────────────────
+        // ① 面光源サンプリング  (面積領域)
+        // ────────────────────────────────────────────────────────────
         {
-            let brdf = PbrBRDF(
-                srgbToLinear(baseColor.rgb),
-                roughness, metallic, normal, wo, wi);
-            D += brdf * G * wt.totalArea;
+            Triangle tri = wt.sampleTriangle(rng);
+            float3 bary = tri.randomBarycentric(rng);
+            float3 Lpos = tri.barycentricToPosition(bary); // ライト頂点
+            float3 Ln = tri.normal();
+
+            float3 wi = normalize(Lpos);
+            float NdotL = saturate(dot(N, wi));
+            float LnDotWi = abs(dot(Ln, -wi));
+            float dist2 = dot(Lpos, Lpos);
+
+            let G = (NdotL * LnDotWi) / max(dist2, 1e-16);
+
+            if (G > 0.0)
+            {
+                let brdf = PbrBRDF(baseColor, roughness, metallic, N, wo, wi);
+
+                let pdfLightArea = 1.0 / wt.totalArea;
+
+                let pdfBrdfSolid = PdfPbrBRDF(baseColor, roughness, metallic, N, wo, wi);
+                let pdfBrdfArea = pdfBrdfSolid * LnDotWi / max(dist2, 1e-16);
+
+                let wLight = pdfLightArea /
+                             max(pdfLightArea + pdfBrdfArea, 1e-16);
+
+                D += brdf * G * wt.totalArea * wLight;
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────
+        // ② BRDF サンプリング  (立体角領域)
+        // ────────────────────────────────────────────────────────────
+        {
+            float pdfBrdfSolid;
+            float3 wi;
+            SamplePbrBRDF(
+                rng,
+                baseColor,
+                roughness,
+                metallic,
+                N,
+                wo,
+                wi,
+                pdfBrdfSolid);
+
+            if (pdfBrdfSolid > 0.0)
+            {
+                float3 Lpos;
+                float3 Ln;
+
+                if (wt.hit(wi, Lpos, Ln))
+                {
+                    let dist2 = dot(Lpos, Lpos);
+                    let LnDotWi = abs(dot(Ln, -wi));
+                    let brdf = PbrBRDF(baseColor, roughness, metallic, N, wo, wi);
+
+                    let pdfLightArea = 1.0 / wt.totalArea;
+                    let pdfBrdfArea = pdfBrdfSolid * LnDotWi / max(dist2, 1e-16);
+
+                    float wBrdf = pdfBrdfArea /
+                                  max(pdfBrdfArea + pdfLightArea, 1e-16);
+
+                    float NdotL = saturate(dot(N, wi));
+
+                    D += brdf * NdotL / max(pdfBrdfSolid, 1e-16) * wBrdf;
+                }
+            }
         }
     }
 
@@ -206,66 +264,66 @@ void main(uint3 tid: SV_DispatchThreadID)
     if (i >= uniforms.dataSize)
         return;
 
-    PCG32 rng = PCG32(pc.seed, i);
+    // PCG32 rng = PCG32(pc.seed, i);
 
-    // sample wi and wo
-    float3 wi;
-    float3 wo;
-    sampleWiWo(rng, wi, wo);
+    // // sample wi and wo
+    // float3 wi;
+    // float3 wo;
+    // sampleWiWo(rng, wi, wo);
 
-    // sample uv
-    let uv = float2(rng.nextFloat(), rng.nextFloat());
-    let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
+    // // sample uv
+    // let uv = float2(rng.nextFloat(), rng.nextFloat());
+    // let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
 
-    // sample parameters
-    let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    let roughness = 0.001;
-    // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
-    let metallic = 1.0;
-    var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
-    normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
+    // // sample parameters
+    // let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
+    // // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    // let roughness = 0.001;
+    // // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    // let metallic = 1.0;
+    // var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
+    // normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 
-    float3 v1;
-    float3 v2;
-    float3 v3;
-    float3 v4;
-    sampleDirection(rng, wi, v1, v2, v3, v4);
+    // float3 v1;
+    // float3 v2;
+    // float3 v3;
+    // float3 v4;
+    // sampleDirection(rng, wi, v1, v2, v3, v4);
 
-    // compute D
-    let D = computeDistribution(
-        rng,
-        uv,
-        wo,
-        v1, v2, v3, v4,
-        mipLevel);
+    // // compute D
+    // let D = computeDistribution(
+    //     rng,
+    //     uv,
+    //     mipLevel,
+    //     wo,
+    //     v1, v2, v3, v4);
 
-    // Save training data
-    let index = i * 26;
-    data[index + 0] = half(baseColor.x);
-    data[index + 1] = half(baseColor.y);
-    data[index + 2] = half(baseColor.z);
-    data[index + 3] = half(roughness);
-    data[index + 4] = half(metallic);
-    data[index + 5] = half(normal.x);
-    data[index + 6] = half(normal.y);
-    data[index + 7] = half(normal.z);
-    data[index + 8] = half(wo.x);
-    data[index + 9] = half(wo.y);
-    data[index + 10] = half(wo.z);
-    data[index + 11] = half(v1.x);
-    data[index + 12] = half(v1.y);
-    data[index + 13] = half(v1.z);
-    data[index + 14] = half(v2.x);
-    data[index + 15] = half(v2.y);
-    data[index + 16] = half(v2.z);
-    data[index + 17] = half(v3.x);
-    data[index + 18] = half(v3.y);
-    data[index + 19] = half(v3.z);
-    data[index + 20] = half(v4.x);
-    data[index + 21] = half(v4.y);
-    data[index + 22] = half(v4.z);
-    data[index + 23] = half(log1p4(D.x));
-    data[index + 24] = half(log1p4(D.y));
-    data[index + 25] = half(log1p4(D.z));
+    // // Save training data
+    // let index = i * 26;
+    // data[index + 0] = half(baseColor.x);
+    // data[index + 1] = half(baseColor.y);
+    // data[index + 2] = half(baseColor.z);
+    // data[index + 3] = half(roughness);
+    // data[index + 4] = half(metallic);
+    // data[index + 5] = half(normal.x);
+    // data[index + 6] = half(normal.y);
+    // data[index + 7] = half(normal.z);
+    // data[index + 8] = half(wo.x);
+    // data[index + 9] = half(wo.y);
+    // data[index + 10] = half(wo.z);
+    // data[index + 11] = half(v1.x);
+    // data[index + 12] = half(v1.y);
+    // data[index + 13] = half(v1.z);
+    // data[index + 14] = half(v2.x);
+    // data[index + 15] = half(v2.y);
+    // data[index + 16] = half(v2.z);
+    // data[index + 17] = half(v3.x);
+    // data[index + 18] = half(v3.y);
+    // data[index + 19] = half(v3.z);
+    // data[index + 20] = half(v4.x);
+    // data[index + 21] = half(v4.y);
+    // data[index + 22] = half(v4.z);
+    // data[index + 23] = half(log1p4(D.x));
+    // data[index + 24] = half(log1p4(D.y));
+    // data[index + 25] = half(log1p4(D.z));
 }
