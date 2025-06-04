@@ -366,8 +366,6 @@ def train_first_phase(
         v4 = v4.to(device)
         D = D.to(device)
 
-        print(v1.shape)
-
         latent = encoder(material)
         pred = decoder(
             latent,
