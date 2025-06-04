@@ -223,7 +223,6 @@ func computeDistribution(
             {
                 float3 Lpos;
                 float3 Ln;
-
                 if (wt.hit(wi, Lpos, Ln))
                 {
                     let dist2 = dot(Lpos, Lpos);
@@ -264,66 +263,66 @@ void main(uint3 tid: SV_DispatchThreadID)
     if (i >= uniforms.dataSize)
         return;
 
-    // PCG32 rng = PCG32(pc.seed, i);
+    PCG32 rng = PCG32(pc.seed, i);
 
-    // // sample wi and wo
-    // float3 wi;
-    // float3 wo;
-    // sampleWiWo(rng, wi, wo);
+    // sample wi and wo
+    float3 wi;
+    float3 wo;
+    sampleWiWo(rng, wi, wo);
 
-    // // sample uv
-    // let uv = float2(rng.nextFloat(), rng.nextFloat());
-    // let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
+    // sample uv
+    let uv = float2(rng.nextFloat(), rng.nextFloat());
+    let mipLevel = sampleMipLevel(rng.nextFloat(), computeMipCount(uniforms.textureSize));
 
-    // // sample parameters
-    // let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    // // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    // let roughness = 0.001;
-    // // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
-    // let metallic = 1.0;
-    // var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
-    // normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
+    // sample parameters
+    let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
+    // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    let roughness = 0.001;
+    let metallic = 1.0;
+    var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
+    normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 
-    // float3 v1;
-    // float3 v2;
-    // float3 v3;
-    // float3 v4;
-    // sampleDirection(rng, wi, v1, v2, v3, v4);
+    float3 v1;
+    float3 v2;
+    float3 v3;
+    float3 v4;
+    sampleDirection(rng, wi, v1, v2, v3, v4);
 
-    // // compute D
-    // let D = computeDistribution(
-    //     rng,
-    //     uv,
-    //     mipLevel,
-    //     wo,
-    //     v1, v2, v3, v4);
+    // compute D
+    let D = computeDistribution(
+        rng,
+        uv,
+        mipLevel,
+        wo,
+        v1, v2, v3, v4);
 
-    // // Save training data
-    // let index = i * 26;
-    // data[index + 0] = half(baseColor.x);
-    // data[index + 1] = half(baseColor.y);
-    // data[index + 2] = half(baseColor.z);
-    // data[index + 3] = half(roughness);
-    // data[index + 4] = half(metallic);
-    // data[index + 5] = half(normal.x);
-    // data[index + 6] = half(normal.y);
-    // data[index + 7] = half(normal.z);
-    // data[index + 8] = half(wo.x);
-    // data[index + 9] = half(wo.y);
-    // data[index + 10] = half(wo.z);
-    // data[index + 11] = half(v1.x);
-    // data[index + 12] = half(v1.y);
-    // data[index + 13] = half(v1.z);
-    // data[index + 14] = half(v2.x);
-    // data[index + 15] = half(v2.y);
-    // data[index + 16] = half(v2.z);
-    // data[index + 17] = half(v3.x);
-    // data[index + 18] = half(v3.y);
-    // data[index + 19] = half(v3.z);
-    // data[index + 20] = half(v4.x);
-    // data[index + 21] = half(v4.y);
-    // data[index + 22] = half(v4.z);
-    // data[index + 23] = half(log1p4(D.x));
-    // data[index + 24] = half(log1p4(D.y));
-    // data[index + 25] = half(log1p4(D.z));
+    // Save training data
+    let index = i * 26;
+    data[index + 0] = half(baseColor.x);
+    data[index + 1] = half(baseColor.y);
+    data[index + 2] = half(baseColor.z);
+    data[index + 3] = half(roughness);
+    data[index + 4] = half(metallic);
+    data[index + 5] = half(normal.x);
+    data[index + 6] = half(normal.y);
+    data[index + 7] = half(normal.z);
+    data[index + 8] = half(wo.x);
+    data[index + 9] = half(wo.y);
+    data[index + 10] = half(wo.z);
+    data[index + 11] = half(v1.x);
+    data[index + 12] = half(v1.y);
+    data[index + 13] = half(v1.z);
+    data[index + 14] = half(v2.x);
+    data[index + 15] = half(v2.y);
+    data[index + 16] = half(v2.z);
+    data[index + 17] = half(v3.x);
+    data[index + 18] = half(v3.y);
+    data[index + 19] = half(v3.z);
+    data[index + 20] = half(v4.x);
+    data[index + 21] = half(v4.y);
+    data[index + 22] = half(v4.z);
+    data[index + 23] = half(log1p4(D.x));
+    data[index + 24] = half(log1p4(D.y));
+    data[index + 25] = half(log1p4(D.z));
 }

@@ -117,6 +117,7 @@ public struct Triangle
 
         hitPos = barycentricToPosition(float3(v0, v1, v2) / v);
         hitNormal = normal();
+        return true;
     }
 };
 
