@@ -25,8 +25,6 @@ struct UniformBuffer
     uint dataSize;
     uint textureSize;
     uint pixelCount;
-    float maxLightSize;
-    float maxLightDistance;
 }
 
 [[vk::binding(0)]]
@@ -123,7 +121,7 @@ func computeDistribution(
         let LnDotWi = abs(dot(lightNormal, -wi));
 
         let distanceSquared = dot(lightPos, lightPos);
-        let G = (NdotL * LnDotWi) / (distanceSquared + 1e-5);
+        let G = (NdotL * LnDotWi) / max(distanceSquared, 1e-16);
 
         if (G > 0.0)
         {
@@ -171,7 +169,7 @@ void main(uint3 tid: SV_DispatchThreadID)
         materialData[materialBaseIndex + 5],
         materialData[materialBaseIndex + 6],
         materialData[materialBaseIndex + 7]);
-    normal = normal * 2.0 - 1.0;
+    normal = normalize(normal * 2.0 - 1.0);
 
     float3 v1;
     float3 v2;

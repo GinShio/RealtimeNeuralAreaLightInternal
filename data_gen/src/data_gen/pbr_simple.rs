@@ -22,9 +22,7 @@ struct UniformBuffer {
     data_size: u32,
     texture_size: u32,
     pixel_count: u32,
-    max_light_size: f32,
-    max_light_distance: f32,
-    _padding: [u32; 3],
+    _padding: u32,
 }
 
 #[repr(C)]
@@ -76,10 +74,6 @@ pub fn data_gen(
 
     // The number of queues for saving data in other threads.
     let save_queue_count = 12;
-
-    // Constants
-    let max_light_size = 3.0;
-    let max_light_distance = 10.0;
 
     // base_color (3)
     // roughness (1)
@@ -649,9 +643,7 @@ pub fn data_gen(
         data_size: (first_shard_buffer_size / first_shard_data_component_size) as u32,
         texture_size: texture_size,
         pixel_count: texture_total_pixel_size as u32,
-        max_light_size,
-        max_light_distance,
-        _padding: [0; 3],
+        _padding: 0,
     };
     uniform_buffer_allocation
         .mapped_slice_mut()
@@ -788,9 +780,7 @@ pub fn data_gen(
         data_size: (second_material_buffer_size / second_material_data_component_size) as u32,
         texture_size: texture_size,
         pixel_count: texture_total_pixel_size as u32,
-        max_light_size,
-        max_light_distance,
-        _padding: [0; 3],
+        _padding: 0,
     };
     uniform_buffer_allocation
         .mapped_slice_mut()
@@ -879,9 +869,7 @@ pub fn data_gen(
         data_size: (second_shard_buffer_size / second_shard_data_component_size) as u32,
         texture_size: texture_size,
         pixel_count: texture_total_pixel_size as u32,
-        max_light_size,
-        max_light_distance,
-        _padding: [0; 3],
+        _padding: 0,
     };
     uniform_buffer_allocation
         .mapped_slice_mut()

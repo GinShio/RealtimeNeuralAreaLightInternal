@@ -25,8 +25,6 @@ struct UniformBuffer
     uint dataSize;
     uint textureSize;
     uint pixelCount;
-    float maxLightSize;
-    float maxLightDistance;
 }
 
 [[vk::binding(0)]]
@@ -156,8 +154,10 @@ func computeDistribution(
         let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
-        let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
-        let metallic = metallicSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        // let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        let roughness = 0.001;
+        // let metallic = metallicSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        let metallic = 1.0;
         var normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
         normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
         normal = normal * 2 - 1;
@@ -175,7 +175,7 @@ func computeDistribution(
         let LnDotWi = abs(dot(lightNormal, -wi));
 
         let distanceSquared = dot(lightPos, lightPos);
-        let G = (NdotL * LnDotWi) / max(distanceSquared, 1e-5);
+        let G = (NdotL * LnDotWi) / max(distanceSquared, 1e-16);
 
         if (G > 0.0)
         {
@@ -219,9 +219,10 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    // let roughness = 0.01;
-    let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    let roughness = 0.001;
+    // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    let metallic = 1.0;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 
