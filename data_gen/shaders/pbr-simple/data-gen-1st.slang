@@ -162,8 +162,10 @@ func computeDistribution(
         let uvM = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uvM, mipLevelFloor).rgb);
-        let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
-        let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
+        // let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
+        // let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
+        let roughness = 0.01;
+        let metallic = 1.0;
 
         var normalTex = normalSampler.SampleLevel(uvM, mipLevelFloor).xyz;
         normalTex.y = 1.0 - normalTex.y; // Y 反転
@@ -274,8 +276,10 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    let roughness = 0.01;
+    let metallic = 1.0;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 
