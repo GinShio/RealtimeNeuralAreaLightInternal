@@ -131,9 +131,11 @@ func sampleDirection(
     float3 Q4 = C - a * uRot + b * vRot; // (−,+)
 
     // ─────────────────────────────────────────────────────────────
-    // 5) 方向ベクトルに正規化して返却
-    v1 = normalize(Q1);
-    v2 = normalize(Q2);
-    v3 = normalize(Q3);
-    v4 = normalize(Q4);
+    // 5) 最大の長さで割って返却
+    let maxLength = max(max(length(Q1), length(Q2)),
+                        max(length(Q3), length(Q4)));
+    v1 = Q1 / maxLength;
+    v2 = Q2 / maxLength;
+    v3 = Q3 / maxLength;
+    v4 = Q4 / maxLength;
 }

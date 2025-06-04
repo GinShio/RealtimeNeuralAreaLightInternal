@@ -135,9 +135,12 @@ func computeDistribution(
     return D / float(ITERATIONS);
 }
 
-func log1p(x: float)->float
+func log1p4(x: float)->float
 {
     var ret = x;
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
     ret = log(1.0 + ret);
     return ret;
 }
@@ -164,10 +167,11 @@ void main(uint3 tid: SV_DispatchThreadID)
         materialData[materialBaseIndex + 2]);
     let roughness = materialData[materialBaseIndex + 3];
     let metallic = materialData[materialBaseIndex + 4];
-    let normal = float3(
+    var normal = float3(
         materialData[materialBaseIndex + 5],
         materialData[materialBaseIndex + 6],
         materialData[materialBaseIndex + 7]);
+    normal = normal * 2.0 - 1.0;
 
     float3 v1;
     float3 v2;
@@ -218,7 +222,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 12] = half(v4.x);
     data[index + 13] = half(v4.y);
     data[index + 14] = half(v4.z);
-    data[index + 15] = half(log1p(D.x));
-    data[index + 16] = half(log1p(D.y));
-    data[index + 17] = half(log1p(D.z));
+    data[index + 15] = half(log1p4(D.x));
+    data[index + 16] = half(log1p4(D.y));
+    data[index + 17] = half(log1p4(D.z));
 }

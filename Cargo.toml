@@ -1,5 +1,5 @@
 [workspace]
-members = [ "data_gen","renderer"]
+members = [ "data_gen", "reference","renderer"]
 resolver = "3"
 
 [workspace.package]

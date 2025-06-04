@@ -251,7 +251,7 @@ class Decoder(nn.Module):
         x = self.relu(self.fc5(x))
         x = self.relu(self.fc6(x))
         x = self.relu(self.fc7(x))
-        return torch.exp(self.fc8(x) - 3.0)  # (B, 3)
+        return torch.exp(self.fc8(x) - 3.0) / 10.0  # (B, 3)
 
 
 def log1p4(x):
@@ -323,8 +323,16 @@ def save_model_as_json(model, path):
         json.dump(model_json, f, indent=2)
 
 
+def log1p4(x):
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    return x
+
+
 def train_first_phase(
-    data_dir, output_dir, num_steps=10000, lr=1e-3, log_interval=100, device="cuda"
+    data_dir, output_dir, num_steps, lr, log_interval=100, device="cuda"
 ):
     encoder = Encoder().to(device)
     decoder = Decoder().to(device)
@@ -358,8 +366,14 @@ def train_first_phase(
         D = D.to(device)
 
         latent = encoder(material)
-        pred = decoder(latent, wo, v1, v2, v3, v4)
-        pred_log = torch.log1p(pred)
+        pred = decoder(
+            latent,
+            wo,
+            v1.normalize(p=2, dim=-1),
+            v2.normalize(p=2, dim=-1),
+            v3.normalize(p=2, dim=-1),
+            v4.normalize(p=2, dim=-1))
+        pred_log = log1p4(pred)
         loss = loss_fn(pred_log, D)
 
         optimizer.zero_grad()
@@ -369,21 +383,10 @@ def train_first_phase(
 
         if step % log_interval == 0 or step == num_steps - 1:
             # Log to Weights & Biases
-            # D_mean = D.mean().item()
-            # D_var = D.var().item()
-            # DD = torch.exp(D) - 1.0
-            # DD_max = DD.max().item()
-            # DD_mean = DD.mean().item()
-            # DD_var = DD.var().item()
             wandb.log(
                 {
                     "step": step,
                     "1st phase/loss": loss.item(),
-                    # "1st phase/D_mean": D_mean,
-                    # "1st phase/D_var": D_var,
-                    # "1st phase/DD_max": DD_max,
-                    # "1st phase/DD_mean": DD_mean,
-                    # "1st phase/DD_var": DD_var,
                 }
             )
 
@@ -451,10 +454,10 @@ def generate_latent_texture(data_dir, output_dir, device="cuda"):
 def train_second_phase(
     data_dir,
     output_dir,
-    num_steps=1000,
-    lr=1e-3,
+    num_steps,
+    lr,
     log_interval=100,
-    save_interval=10000,
+    save_interval=1000,
     device="cuda",
 ):
     with open(os.path.join(data_dir, "data_gen_config.json"), "r") as f:
@@ -518,8 +521,14 @@ def train_second_phase(
 
         latent = latent_texture
 
-        pred = decoder(latent, wo, v1, v2, v3, v4)
-        pred_log = torch.log1p(pred)
+        pred = decoder(
+            latent,
+            wo,
+            v1.normalize(p=2, dim=-1),
+            v2.normalize(p=2, dim=-1),
+            v3.normalize(p=2, dim=-1),
+            v4.normalize(p=2, dim=-1))
+        pred_log = log1p4(pred)
         loss = loss_fn(pred_log, D)
 
         optimizer.zero_grad()
@@ -529,21 +538,10 @@ def train_second_phase(
 
         if step % log_interval == 0:
             # Log to Weights & Biases
-            # D_mean = D.mean().item()
-            # D_var = D.var().item()
-            # DD = torch.exp(D) - 1.0
-            # DD_max = DD.max().item()
-            # DD_mean = DD.mean().item()
-            # DD_var = DD.var().item()
             wandb.log(
                 {
                     "step": step,
                     "2nd phase/loss": loss.item(),
-                    # "2nd phase/D_mean": D_mean,
-                    # "2nd phase/D_var": D_var,
-                    # "2nd phase/DD_max": DD_max,
-                    # "2nd phase/DD_mean": DD_mean,
-                    # "2nd phase/DD_var": DD_var,
                 }
             )
 
@@ -630,12 +628,29 @@ def train(steps):
     data_dir = "data/pbr-simple"
     output_dir = "output/pbr-simple"
 
-    wandb.init(project="Realtime Neural Area Light")
+    lr_first = 1e-3
+    lr_second = 1e-3
+
+    config = {
+        "steps": steps,
+        "lr_first": lr_first,
+        "lr_second": lr_second,
+        "layer_count": 8,
+        "hidden_size": 64,
+    }
+
+    wandb.init(project="Realtime Neural Area Light", config=config)
 
     start = time.time()
 
     # first phase
-    train_first_phase(data_dir, output_dir, num_steps=steps, device="cuda")
+    train_first_phase(
+        data_dir=data_dir,
+        output_dir=output_dir,
+        num_steps=steps,
+        lr=lr_first,
+        device="cuda",
+    )
 
     # generate latent texture
     generate_latent_texture(data_dir, output_dir, device="cuda")
@@ -645,6 +660,7 @@ def train(steps):
         data_dir=data_dir,
         output_dir=output_dir,
         num_steps=steps // 10,
+        lr=lr_second,
         log_interval=100,
         save_interval=steps // 100,
         device="cuda",

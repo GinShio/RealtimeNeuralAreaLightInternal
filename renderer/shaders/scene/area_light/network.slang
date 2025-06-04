@@ -208,6 +208,11 @@ public struct Network
             matrixLayout,
             componentType);
         output = decoderFinalAct.eval(output - CoopVec<half, 3>(3.0, 3.0, 3.0));
+        [unroll]
+        for (var i = 0; i < 3; i++)
+        {
+            output[i] = output[i] / half(10.0);
+        }
 
         return output;
     }

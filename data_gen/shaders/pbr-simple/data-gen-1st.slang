@@ -156,11 +156,12 @@ func computeDistribution(
         let uv_modify = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = baseColorSampler.SampleLevel(uv_modify, mipLevelFloor);
-        // let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
-        let roughness = 0.01;
+        let roughness = roughnessSampler.SampleLevel(uv_modify, mipLevelFloor).r;
+        // let roughness = 0.01;
         let metallic = metallicSampler.SampleLevel(uv_modify, mipLevelFloor).r;
         var normal = normalSampler.SampleLevel(uv_modify, mipLevelFloor).xyz;
         normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
+        normal = normal * 2 - 1;
 
         let u = rng.nextFloat();
         let v = rng.nextFloat();
@@ -175,11 +176,13 @@ func computeDistribution(
         let LnDotWi = saturate(abs(dot(lightNormal, -wi)));
 
         let distanceSquared = dot(lightPos, lightPos);
-        let G = (NdotL * LnDotWi) / (distanceSquared + 1e-5);
+        let G = (NdotL * LnDotWi) / max(distanceSquared, 1e-5);
 
         if (G > 0.0)
         {
-            let brdf = PbrBRDF(srgbToLinear(baseColor.rgb), roughness, metallic, normal, wo, wi);
+            let brdf = PbrBRDF(
+                srgbToLinear(baseColor.rgb),
+                roughness, metallic, normal, wo, wi);
             D += brdf * G * wt.totalArea;
         }
     }
@@ -187,9 +190,12 @@ func computeDistribution(
     return D / float(ITERATIONS);
 }
 
-func log1p(x: float)->float
+func log1p4(x: float)->float
 {
     var ret = x;
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
     ret = log(1.0 + ret);
     return ret;
 }
@@ -214,8 +220,8 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    let roughness = 0.01;
+    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    // let roughness = 0.01;
     let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
@@ -273,7 +279,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 20] = half(v4.x);
     data[index + 21] = half(v4.y);
     data[index + 22] = half(v4.z);
-    data[index + 23] = half(log1p(D.x));
-    data[index + 24] = half(log1p(D.y));
-    data[index + 25] = half(log1p(D.z));
+    data[index + 23] = half(log1p4(D.x));
+    data[index + 24] = half(log1p4(D.y));
+    data[index + 25] = half(log1p4(D.z));
 }

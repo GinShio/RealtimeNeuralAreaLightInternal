@@ -220,10 +220,10 @@ func fsMain(input: VertexOutput)->FragmentOutput
         v3 -= input.viewPosition;
         v4 -= input.viewPosition;
 
-        v1 = mul(TBN, normalize(v1));
-        v2 = mul(TBN, normalize(v2));
-        v3 = mul(TBN, normalize(v3));
-        v4 = mul(TBN, normalize(v4));
+        v1 = normalize(mul(TBN, v1));
+        v2 = normalize(mul(TBN, v2));
+        v3 = normalize(mul(TBN, v3));
+        v4 = normalize(mul(TBN, v4));
 
         modifyVertices(Vt, v1, v2, v3, v4);
 

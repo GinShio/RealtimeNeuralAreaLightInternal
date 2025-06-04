@@ -2,7 +2,7 @@ import "../rtxns/PCG32";
 
 func intersectZPlane(float3 p1, float3 p2)->float3
 {
-    let t = -p1.z / (p2.z - p1.z + 1e-5); // avoid div 0
+    let t = -p1.z / max(p2.z - p1.z, 1e-5); // avoid div 0
     return lerp(p1, p2, saturate(t));
 }
 
