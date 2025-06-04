@@ -165,10 +165,8 @@ public func SamplePbrBRDF(
     {
         float alpha = max(1e-4, roughness * roughness);
         float3 H;
-        float3 L;
         sampleGGXVNDF(rng, V, alpha, H, L);
 
-        // pdfSpec
         float NdotH = saturate(dot(N, H));
         float VdotH = saturate(dot(V, H));
         float G1 = G1_Smith(alpha, saturate(dot(N, V)));
@@ -182,7 +180,6 @@ public func SamplePbrBRDF(
 
         pdfDiff = saturate(dot(N, L)) / PI;
 
-        // pdfSpec（評価だけ必要）
         float alpha = max(1e-4, roughness * roughness);
         float3 H = normalize(V + L);
         float NdotH = saturate(dot(N, H));

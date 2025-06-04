@@ -162,10 +162,8 @@ func computeDistribution(
         let uvM = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uvM, mipLevelFloor).rgb);
-        // let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
-        // let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
-        let roughness = 0.001;
-        let metallic = 1.0;
+        let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
+        let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
 
         var normalTex = normalSampler.SampleLevel(uvM, mipLevelFloor).xyz;
         normalTex.y = 1.0 - normalTex.y; // Y 反転
@@ -199,7 +197,7 @@ func computeDistribution(
                 let wLight = pdfLightArea /
                              max(pdfLightArea + pdfBrdfArea, 1e-16);
 
-                D += brdf * G * wt.totalArea * wLight;
+                D += brdf * G * wt.totalArea * wLight / float(ITERATIONS);
             }
         }
 
@@ -237,13 +235,13 @@ func computeDistribution(
 
                     float NdotL = saturate(dot(N, wi));
 
-                    D += brdf * NdotL / max(pdfBrdfSolid, 1e-16) * wBrdf;
+                    D += brdf * NdotL / max(pdfBrdfSolid, 1e-16) * wBrdf / float(ITERATIONS);
                 }
             }
         }
     }
 
-    return D / float(ITERATIONS);
+    return D;
 }
 
 func log1p4(x: float)->float
@@ -276,10 +274,8 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
-    let roughness = 0.001;
-    let metallic = 1.0;
+    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 

@@ -98,24 +98,24 @@ public struct Triangle
         hitPos = float3(0.0, 0.0, 0.0);
         hitNormal = float3(0.0, 0.0, 0.0);
 
-        let v2 = dot(v, cross(v1, v0));
-        let v1 = dot(v, cross(v0, v2));
-        let v0 = dot(v, cross(v2, v1));
+        let vv2 = dot(v, cross(v1, v0));
+        let vv1 = dot(v, cross(v0, v2));
+        let vv0 = dot(v, cross(v2, v1));
 
-        if (v0 < 0.0 || v1 < 0.0 || v2 < 0.0)
+        if (vv0 < 0.0 || vv1 < 0.0 || vv2 < 0.0)
         {
             // 三角形の外側にある
             return false;
         }
 
-        let v = v0 + v1 + v2;
-        if (v < 1e-5)
+        let vv = vv0 + vv1 + vv2;
+        if (vv < 1e-5)
         {
             // 面に平行
             return false;
         }
 
-        hitPos = barycentricToPosition(float3(v0, v1, v2) / v);
+        hitPos = barycentricToPosition(float3(vv0, vv1, vv2) / vv);
         hitNormal = normal();
         return true;
     }
@@ -193,7 +193,7 @@ public struct WeightedTriangles
         {
             return false;
         }
-        const float3 dir = normalize(v);
+        let dir = normalize(v);
         for (int i = 0; i < triCount; ++i)
         {
             if (triangles[i].hit(dir, hitPos, hitNormal))

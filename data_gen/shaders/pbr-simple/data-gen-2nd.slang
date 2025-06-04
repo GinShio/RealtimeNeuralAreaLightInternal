@@ -141,7 +141,7 @@ func computeDistribution(
                 let wLight = pdfLightArea /
                              max(pdfLightArea + pdfBrdfArea, 1e-16);
 
-                D += brdf * G * wt.totalArea * wLight;
+                D += brdf * G * wt.totalArea * wLight / float(ITERATIONS);
             }
         }
 
@@ -180,13 +180,13 @@ func computeDistribution(
 
                     float NdotL = saturate(dot(N, wi));
 
-                    D += brdf * NdotL / max(pdfBrdfSolid, 1e-16) * wBrdf;
+                    D += brdf * NdotL / max(pdfBrdfSolid, 1e-16) * wBrdf / float(ITERATIONS);
                 }
             }
         }
     }
 
-    return D / float(ITERATIONS);
+    return D;
 }
 
 func log1p4(x: float)->float
