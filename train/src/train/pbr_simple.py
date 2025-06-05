@@ -408,8 +408,11 @@ def save_model_as_json(model, path):
         json.dump(model_json, f, indent=2)
 
 
-def log1pScale(x):
-    x = torch.log1p(x / 2.0)
+def log1p4(x):
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
     return x
 
 
@@ -455,7 +458,7 @@ def train_first_phase(
             F.normalize(v3, p=2, dim=-1),
             F.normalize(v4, p=2, dim=-1),
         )
-        pred_log = log1pScale(pred)
+        pred_log = log1p4(pred)
         loss = loss_fn(pred_log, D)
 
         optimizer.zero_grad()
@@ -624,7 +627,7 @@ def train_second_phase(
             F.normalize(v3, p=2, dim=-1),
             F.normalize(v4, p=2, dim=-1),
         )
-        pred_log = log1pScale(pred)
+        pred_log = log1p4(pred)
         loss = loss_fn(pred_log, D)
 
         optimizer.zero_grad()
@@ -724,8 +727,8 @@ def train(steps):
     data_dir = "data/pbr-simple"
     output_dir = "output/pbr-simple"
 
-    lr_first = 1e-3
-    lr_second = 1e-4
+    lr_first = 1e-4
+    lr_second = 1e-5
 
     config = {
         "steps": steps,

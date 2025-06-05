@@ -210,10 +210,10 @@ func computeDistribution(
         let uvM = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uvM, mipLevelFloor).rgb);
-        // let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
-        // let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
-        var roughness = 0.01;
-        let metallic = 1.0;
+        let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
+        let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
+        // var roughness = 0.01;
+        // let metallic = 1.0;
         // roughness = roughnessClipping(roughness);
 
         var normalTex = normalSampler.SampleLevel(uvM, mipLevelFloor).xyz;
@@ -295,10 +295,13 @@ func computeDistribution(
     return D;
 }
 
-func log1pScale(x: float)->float
+func log1p4(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret / 2.0);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
+    ret = log(1.0 + ret);
     return ret;
 }
 
@@ -317,10 +320,10 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    // let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
-    let roughness = 0.01;
-    let metallic = 1.0;
+    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    // let roughness = 0.01;
+    // let metallic = 1.0;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 
@@ -380,7 +383,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 20] = half(v4.x);
     data[index + 21] = half(v4.y);
     data[index + 22] = half(v4.z);
-    data[index + 23] = half(log1pScale(D.x));
-    data[index + 24] = half(log1pScale(D.y));
-    data[index + 25] = half(log1pScale(D.z));
+    data[index + 23] = half(log1p4(D.x));
+    data[index + 24] = half(log1p4(D.y));
+    data[index + 25] = half(log1p4(D.z));
 }

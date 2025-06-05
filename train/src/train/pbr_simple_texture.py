@@ -444,12 +444,18 @@ def save_model_as_json(model, path):
         json.dump(model_json, f, indent=2)
 
 
-def log1pScale(x):
-    x = torch.log1p(x / 2.0)
+def log1p4(x):
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
+    x = torch.log1p(x)
     return x
 
-def log1pScaleInv(x):
-    x = torch.expm1(x) * 2.0
+def log1p4Inv(x):
+    x = torch.expm1(x)
+    x = torch.expm1(x)
+    x = torch.expm1(x)
+    x = torch.expm1(x)
     return x
 
 
@@ -517,7 +523,7 @@ def train_first_phase(
             F.normalize(v4, p=2, dim=-1),
         )
 
-        D_pred_log = log1pScale(D_pred)
+        D_pred_log = log1p4(D_pred)
         D_loss = D_loss_fn(D_pred_log, D)
 
         influence_pred = torch.zeros_like(uv_sample)
@@ -545,7 +551,7 @@ def train_first_phase(
             v3,
             v4,
             uv_sample.unsqueeze(0).to(device),  # (1, 1048576, 2)
-        ) / log1pScaleInv(D)
+        ) / log1p4Inv(D)
 
         influence_loss = influence_loss_fn(influence_pred, influence_target)
 
@@ -742,7 +748,7 @@ def train_second_phase(
             F.normalize(v4, p=2, dim=-1),
         )
 
-        D_pred_log = log1pScale(D_pred)
+        D_pred_log = log1p4(D_pred)
         D_loss = D_loss_fn(D_pred_log, D)
 
         influence_pred = torch.zeros_like(uv_sample)
@@ -770,7 +776,7 @@ def train_second_phase(
             v3,
             v4,
             uv_sample.unsqueeze(0).to(device),  # (1, 1048576, 2)
-        ) / log1pScaleInv(D)
+        ) / log1p4Inv(D)
 
         influence_loss = influence_loss_fn(influence_pred, influence_target)
 
