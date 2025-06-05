@@ -107,24 +107,33 @@ public struct Triangle
         hitPos = float3(0.0, 0.0, 0.0);
         hitNormal = float3(0.0, 0.0, 0.0);
 
-        let vv2 = dot(v, cross(v1, v0));
-        let vv1 = dot(v, cross(v0, v2));
-        let vv0 = dot(v, cross(v2, v1));
+        let epsilon = 1e-5;
 
-        if (vv0 < 0.0 || vv1 < 0.0 || vv2 < 0.0)
-        {
-            // 三角形の外側にある
+        let edge1 = v1 - v0;
+        let edge2 = v2 - v0;
+
+        let pvec = cross(v, edge2);
+        let det = dot(edge1, pvec);
+
+        if (abs(det) < epsilon)
+            return false; // レイと面が平行
+
+        let invDet = 1.0 / det;
+        let tvec = -v0; // レイの始点は原点
+        let u = dot(tvec, pvec) * invDet;
+        if (u < 0.0 || u > 1.0)
             return false;
-        }
 
-        let vv = vv0 + vv1 + vv2;
-        if (vv < 1e-5)
-        {
-            // 面に平行
+        let qvec = cross(tvec, edge1);
+        let vval = dot(v, qvec) * invDet;
+        if (vval < 0.0 || u + vval > 1.0)
             return false;
-        }
 
-        hitPos = barycentricToPosition(float3(vv0, vv1, vv2) / vv);
+        let t = dot(edge2, qvec) * invDet;
+        if (t < epsilon)
+            return false; // 三角形の後ろにある
+
+        hitPos = v * t;
         hitNormal = normal();
         return true;
     }

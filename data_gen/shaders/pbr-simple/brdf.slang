@@ -143,7 +143,8 @@ public func SamplePbrBRDF(
     out outPdf: float)
 {
     let N = normalize(normal);
-    let V = normalize(wo);
+    let tangentFrameMatrix = tangentFrame(N);
+    let V = normalize(mul(transpose(tangentFrameMatrix), wo));
 
     //------------------------------------------------------------------
     // ローブ混合確率
@@ -196,7 +197,7 @@ public func SamplePbrBRDF(
     //------------------------------------------------------------------
     // 4) wi の計算
     //------------------------------------------------------------------
-    outWi = normalize(mul(tangentFrame(N), L));
+    outWi = normalize(mul(tangentFrameMatrix, L));
 }
 
 public func PdfPbrBRDF(
