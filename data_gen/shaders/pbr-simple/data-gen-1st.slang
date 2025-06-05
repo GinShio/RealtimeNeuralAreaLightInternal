@@ -350,9 +350,9 @@ void main(uint3 tid: SV_DispatchThreadID)
         wo,
         v1, v2, v3, v4);
 
-    // if (D.x == 0.0 && D.y == 0.0 && D.z == 0.0)
+    // if (isnan(D.x) || isnan(D.y) || isnan(D.z))
     // {
-    //     printf("Zero distribution at index %d\n", i);
+    //     printf("NaN distribution at index %d\n", i);
     // }
 
     // Save training data

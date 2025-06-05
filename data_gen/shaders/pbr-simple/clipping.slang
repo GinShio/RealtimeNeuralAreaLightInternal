@@ -1,6 +1,6 @@
 import "../rtxns/PCG32";
 
-static const float CLIP_Z = 0.0;
+static const float CLIP_Z = 0.0001;
 
 func intersectZPlane(float3 a, float3 b)->float3
 {
@@ -8,7 +8,7 @@ func intersectZPlane(float3 a, float3 b)->float3
     return lerp(a, b, t);
 }
 
-func clipQuadAgainstZPlane(float3 quad[4], out float3 clipped[6], out int outCount)
+func clipQuadAgainstZPlane(float3 quad[4], out float3 clipped[5], out int outCount)
 {
     outCount = 0;
     for (int i = 0; i < 4; ++i)
@@ -28,7 +28,7 @@ func clipQuadAgainstZPlane(float3 quad[4], out float3 clipped[6], out int outCou
 }
 
 func triangulatePolygon(
-    float3 poly[6],
+    float3 poly[5],
     int count,
     out Triangle triangles[3],
     out uint triCount)
@@ -40,7 +40,7 @@ func triangulatePolygon(
         return;
     }
     triCount = 0;
-    for (int i = 0; i < count; ++i)
+    for (int i = 1; i < count - 1; ++i)
     {
         var triangle = Triangle();
         triangle.v0 = poly[0];
@@ -173,7 +173,7 @@ public struct WeightedTriangles
         ->WeightedTriangles
     {
         float3 quad[4] = { v1, v2, v3, v4 };
-        float3 clipped[6];
+        float3 clipped[5];
         int clipCount;
         clipQuadAgainstZPlane(quad, clipped, clipCount);
 
