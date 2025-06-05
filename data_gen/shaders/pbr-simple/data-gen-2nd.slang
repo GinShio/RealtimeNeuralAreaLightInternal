@@ -233,7 +233,7 @@ func computeDistribution(
 func log1pScale(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret / 3.0);
+    ret = log(1.0 + ret / 2.0);
     return ret;
 }
 

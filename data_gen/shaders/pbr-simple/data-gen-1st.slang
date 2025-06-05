@@ -214,7 +214,7 @@ func computeDistribution(
         // let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
         var roughness = 0.01;
         let metallic = 1.0;
-        roughness = roughnessClipping(roughness);
+        // roughness = roughnessClipping(roughness);
 
         var normalTex = normalSampler.SampleLevel(uvM, mipLevelFloor).xyz;
         normalTex.y = 1.0 - normalTex.y; // Y 反転
@@ -298,7 +298,7 @@ func computeDistribution(
 func log1pScale(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret / 3.0);
+    ret = log(1.0 + ret / 2.0);
     return ret;
 }
 
@@ -327,7 +327,14 @@ void main(uint3 tid: SV_DispatchThreadID)
     // sample wi and wo
     float3 wi;
     float3 wo;
-    sampleWiWo(rng, baseColor, roughness, metallic, normal, wi, wo);
+    sampleWiWo(
+        rng,
+        baseColor,
+        roughness,
+        metallic,
+        normalize(normal * 2 - 1),
+        wi,
+        wo);
 
     float3 v1;
     float3 v2;
@@ -342,6 +349,11 @@ void main(uint3 tid: SV_DispatchThreadID)
         mipLevel,
         wo,
         v1, v2, v3, v4);
+
+    // if (D.x == 0.0 && D.y == 0.0 && D.z == 0.0)
+    // {
+    //     printf("Zero distribution at index %d\n", i);
+    // }
 
     // Save training data
     let index = i * 26;

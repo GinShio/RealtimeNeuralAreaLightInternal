@@ -1,51 +1,34 @@
 import "../rtxns/PCG32";
 
-func intersectZPlane(float3 p1, float3 p2)->float3
+static const float CLIP_Z = 0.0;
+
+func intersectZPlane(float3 a, float3 b)->float3
 {
-    // clip with the z = 0.01 plane
-    if (p1.z > 0.0 && p2.z <= 0.0)
-    {
-        let t = (0.01 - p1.z) / max(p1.z - p2.z, 1e-8);
-        return lerp(p1, p2, saturate(t));
-    }
-    else
-    {
-        let t = (0.01 - p2.z) / max(p2.z - p1.z, 1e-8);
-        return lerp(p2, p1, saturate(t));
-    }
+    float t = (CLIP_Z - a.z) / (b.z - a.z);
+    return lerp(a, b, t);
 }
 
-func clipQuadAgainstZPlane(float3 quad[4], out float3 clipped[5], out int outCount)
+func clipQuadAgainstZPlane(float3 quad[4], out float3 clipped[6], out int outCount)
 {
-    uint inCount = 4;
-
     outCount = 0;
-    for (uint i = 0; i < inCount; ++i)
+    for (int i = 0; i < 4; ++i)
     {
         float3 curr = quad[i];
-        float3 prev = quad[(i + inCount - 1) % inCount];
+        float3 prev = quad[(i + 3) % 4];
 
-        bool currInside = curr.z >= 0.0;
-        bool prevInside = prev.z >= 0.0;
+        bool currInside = curr.z >= CLIP_Z;
+        bool prevInside = prev.z >= CLIP_Z;
 
-        if (currInside && prevInside)
-        {
-            clipped[outCount++] = curr;
-        }
-        else if (currInside && !prevInside)
-        {
+        if (currInside != prevInside) // 符号が異なる＝交差
             clipped[outCount++] = intersectZPlane(prev, curr);
+
+        if (currInside) // 現頂点が内側なら push
             clipped[outCount++] = curr;
-        }
-        else if (!currInside && prevInside)
-        {
-            clipped[outCount++] = intersectZPlane(prev, curr);
-        }
     }
 }
 
 func triangulatePolygon(
-    float3 poly[5],
+    float3 poly[6],
     int count,
     out Triangle triangles[3],
     out uint triCount)
@@ -56,20 +39,26 @@ func triangulatePolygon(
         triangles = { Triangle(), Triangle(), Triangle() };
         return;
     }
-    triCount = count - 2;
-    for (int i = 0; i < triCount; ++i)
+    triCount = 0;
+    for (int i = 0; i < count; ++i)
     {
-        triangles[i].v0 = poly[0];
-        triangles[i].v1 = poly[i + 1];
-        triangles[i].v2 = poly[i + 2];
+        var triangle = Triangle();
+        triangle.v0 = poly[0];
+        triangle.v1 = poly[i];
+        triangle.v2 = poly[i + 1];
+        if (triangle.area() < 1e-12)
+        {
+            continue;
+        }
+        triangles[triCount++] = triangle;
     }
 }
 
 public struct Triangle
 {
-    float3 v0;
-    float3 v1;
-    float3 v2;
+    public float3 v0;
+    public float3 v1;
+    public float3 v2;
 
     func area()->float
     {
@@ -104,10 +93,13 @@ public struct Triangle
 
     public func hit(v: float3, out hitPos: float3, out hitNormal: float3)->bool
     {
+        const float EPS_DET = 1e-9;
+        const float EPS_BARY = 1e-5;
+
         hitPos = float3(0.0, 0.0, 0.0);
         hitNormal = float3(0.0, 0.0, 0.0);
 
-        let epsilon = 1e-5;
+        let epsilon = 1e-9;
 
         let edge1 = v1 - v0;
         let edge2 = v2 - v0;
@@ -115,23 +107,37 @@ public struct Triangle
         let pvec = cross(v, edge2);
         let det = dot(edge1, pvec);
 
-        if (abs(det) < epsilon)
+        if (abs(det) < EPS_DET)
+        {
+            if (abs(dot(v0, normal())) < 1e-5)
+            {
+                hitNormal = normal();
+                return true; // レイが三角形の平面上にある
+            }
+
             return false; // レイと面が平行
+        }
 
         let invDet = 1.0 / det;
         let tvec = -v0; // レイの始点は原点
         let u = dot(tvec, pvec) * invDet;
-        if (u < 0.0 || u > 1.0)
+        if (u < 0.0 - EPS_BARY || u > 1.0 + EPS_BARY)
+        {
             return false;
+        }
 
         let qvec = cross(tvec, edge1);
         let vval = dot(v, qvec) * invDet;
-        if (vval < 0.0 || u + vval > 1.0)
-            return false;
+        if (vval < 0.0 - EPS_BARY || u + vval > 1.0 + EPS_BARY)
+        {
+            return false; // 三角形の外側
+        }
 
         let t = dot(edge2, qvec) * invDet;
         if (t < epsilon)
+        {
             return false; // 三角形の後ろにある
+        }
 
         hitPos = v * t;
         hitNormal = normal();
@@ -141,7 +147,7 @@ public struct Triangle
 
 public struct WeightedTriangles
 {
-    Triangle triangles[3];
+    public Triangle triangles[3];
     float weights[3];
     public float totalArea;
     public int triCount;
@@ -167,7 +173,7 @@ public struct WeightedTriangles
         ->WeightedTriangles
     {
         float3 quad[4] = { v1, v2, v3, v4 };
-        float3 clipped[5];
+        float3 clipped[6];
         int clipCount;
         clipQuadAgainstZPlane(quad, clipped, clipCount);
 

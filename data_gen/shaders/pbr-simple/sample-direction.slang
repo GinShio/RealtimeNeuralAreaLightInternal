@@ -24,7 +24,7 @@ static const float kLogAspectMax = log(kAspectMax);
 static const float kAspectMax = 16.0f;
 
 // 面法線と中心方向 w の最大傾斜角（台形化の強さ）
-static const float kTiltMaxDeg = 180.0f;
+static const float kTiltMaxDeg = 85.0f;
 static const float kTiltMaxRad = kTiltMaxDeg * kDegToRad;
 
 // ────────────── 補助関数 ───────────────────────────────────────────
@@ -74,7 +74,7 @@ func sampleDirection(
     float3 t0, b0;
     buildONB(w, t0, b0); // w 周りの局所基底
     float3 tiltAxis = normalize(cos(psi) * t0 + sin(psi) * b0);
-    float3 n = rotateAroundAxis(-w, tiltAxis, tilt); // 面法線
+    float3 n = rotateAroundAxis(w, tiltAxis, tilt); // 面法線
 
     // 新しい平面基底
     float3 uDir, vDir;
@@ -118,12 +118,12 @@ func sampleDirection(
     // 4) 長さスケールを決めて四隅へ射出
     //    距離 dp = 1 とし、w と n の成す角 δ で foreshortening を補正
     float dp = 1.0f;
-    float cosDelta = max(0.001f, dot(-w, n)); // 0 に近いと発散するので下限
+    float cosDelta = max(0.001f, dot(w, n)); // 0 に近いと発散するので下限
     // cosDeltaで割るのは長方形が斜めの場合に実長にスケールを保つため。
     float a = dp * tan(ax) / cosDelta; // u 方向半長
     float b = dp * tan(ay) / cosDelta; // v 方向半長
 
-    float3 C = -w * dp; // 矩形中心
+    float3 C = w * dp; // 矩形中心
 
     float3 Q1 = C + a * uRot + b * vRot; // 反時計回り (+,+)
     float3 Q2 = C + a * uRot - b * vRot; // (+,−)
@@ -131,16 +131,27 @@ func sampleDirection(
     float3 Q4 = C - a * uRot + b * vRot; // (−,+)
 
     // ─────────────────────────────────────────────────────────────
-    // 5) 最大の長さで割って返却
-    let maxLength = max(max(length(Q1), length(Q2)),
-                        max(length(Q3), length(Q4)));
-    v1 = Q1 / maxLength;
-    v2 = Q2 / maxLength;
-    v3 = Q3 / maxLength;
-    v4 = Q4 / maxLength;
+    // 5) 四隅を返却
+    v1 = Q1;
+    v2 = Q2;
+    v3 = Q3;
+    v4 = Q4;
 
     // ─────────────────────────────────────────────────────────────
-    // 6) ランダムで逆順に並べ替える
+    // ベクトルが長すぎる場合は短くスケーリングする。
+    let maxLength = max(max(length(Q1), length(Q2)),
+                        max(length(Q3), length(Q4)));
+    if (maxLength > 200.0)
+    {
+        float scale = 200.0f / maxLength;
+        v1 *= scale;
+        v2 *= scale;
+        v3 *= scale;
+        v4 *= scale;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 7) ランダムで逆順に並べ替える
     if (rng.nextFloat() < 0.5f)
     {
         float3 temp = v1;
