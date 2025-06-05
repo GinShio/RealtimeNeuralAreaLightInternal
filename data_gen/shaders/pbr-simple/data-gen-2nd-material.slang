@@ -91,6 +91,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     // let metallic = 1.0;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
+    normal = normalize(normal * 2.0 - 1.0);
 
     // Save training data
     let index = i * 8;

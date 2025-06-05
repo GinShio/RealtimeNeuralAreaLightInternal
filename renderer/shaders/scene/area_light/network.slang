@@ -17,17 +17,39 @@ public struct Network
         StructuredBuffer<half> decoderMatrixBuffer,
         uint4 weightOffsets0,
         uint4 weightOffsets1,
+        uint4 weightOffsets2,
         uint4 biasOffsets0,
-        uint4 biasOffsets1)
+        uint4 biasOffsets1,
+        uint4 biasOffsets2)
     {
         decoderParameters = MatrixBiasBuffer<half>(decoderMatrixBuffer);
         weightOffsets = {
-            weightOffsets0.x, weightOffsets0.y, weightOffsets0.z, weightOffsets0.w,
-            weightOffsets1.x, weightOffsets1.y, weightOffsets1.z, weightOffsets1.w
+            weightOffsets0.x,
+            weightOffsets0.y,
+            weightOffsets0.z,
+            weightOffsets0.w,
+            weightOffsets1.x,
+            weightOffsets1.y,
+            weightOffsets1.z,
+            weightOffsets1.w,
+            weightOffsets2.x,
+            weightOffsets2.y,
+            weightOffsets2.z,
+            weightOffsets2.w,
         };
         biasOffsets = {
-            biasOffsets0.x, biasOffsets0.y, biasOffsets0.z, biasOffsets0.w,
-            biasOffsets1.x, biasOffsets1.y, biasOffsets1.z, biasOffsets1.w
+            biasOffsets0.x,
+            biasOffsets0.y,
+            biasOffsets0.z,
+            biasOffsets0.w,
+            biasOffsets1.x,
+            biasOffsets1.y,
+            biasOffsets1.z,
+            biasOffsets1.w,
+            biasOffsets2.x,
+            biasOffsets2.y,
+            biasOffsets2.z,
+            biasOffsets2.w,
         };
     }
 
@@ -43,16 +65,16 @@ public struct Network
     }
 
     private static func transformFrameFunc(
-        transformFrameInput: CoopVec<half, 12>,
+        transformFrameInput: CoopVec<half, 24>,
         wo: float3,
         v1: float3,
         v2: float3,
         v3: float3,
         v4: float3)
-        ->CoopVec<half, 30>
+        ->CoopVec<half, 60>
     {
-        CoopVec<half, 30> result;
-        for (var i = 0; i < 2; i++)
+        CoopVec<half, 60> result;
+        for (var i = 0; i < 4; i++)
         {
             var normal = float3(
                 transformFrameInput[i * 6 + 0],
@@ -90,15 +112,15 @@ public struct Network
 
     private static func combineLatentVectorAndTransformFrame(
         latentVector: CoopVec<half, 8>,
-        transformFrameOutput: CoopVec<half, 30>)
-        ->CoopVec<half, 38>
+        transformFrameOutput: CoopVec<half, 60>)
+        ->CoopVec<half, 68>
     {
-        CoopVec<half, 38> result;
+        CoopVec<half, 68> result;
         for (var i = 0; i < 8; i++)
         {
             result[i] = latentVector[i];
         }
-        for (var i = 0; i < 30; i++)
+        for (var i = 0; i < 60; i++)
         {
             result[i + 8] = transformFrameOutput[i];
         }
@@ -116,7 +138,6 @@ public struct Network
         ->CoopVec<half, 3>
     {
         let act = rtxns::mlp::ReLUAct<half, 64>();
-        let decoderFinalAct = rtxns::mlp::ExponentialAct<half, 3>();
         let matrixLayout = CoopVecMatrixLayout::InferencingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
@@ -127,35 +148,25 @@ public struct Network
         // decoder
         CoopVec<half, 3> output;
 
-        // decoder transform frame
-        CoopVec<half, 12> transformFrameInput;
-        transformFrameInput = LinearOp<half, 12, 8>(
+        // decoder transform frame 1st layer
+        hidden = LinearOp<half, 64, 8>(
             latentVector,
             decoderParameters,
             uint2(weightOffsets[0], biasOffsets[0]),
             matrixLayout,
             componentType);
-        transformFrameInput = tanh(transformFrameInput);
-        CoopVec<half, 30> transformFrameOutput;
-        transformFrameOutput = transformFrameFunc(
-            transformFrameInput, wo, v1, v2, v3, v4);
+        hidden = act.eval(hidden);
 
-        // decoder input
-        CoopVec<half, 38> decoderInputParams;
-        decoderInputParams = combineLatentVectorAndTransformFrame(
-            latentVector,
-            transformFrameOutput);
-
-        // decoder 1st layer
-        hidden = LinearOp<half, 64, 38>(
-            decoderInputParams,
+        // decoder transform frame 2nd layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
             decoderParameters,
             uint2(weightOffsets[1], biasOffsets[1]),
             matrixLayout,
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 2nd layer
+        // decoder transform frame 3rd layer
         hidden = LinearOp<half, 64, 64>(
             hidden,
             decoderParameters,
@@ -164,25 +175,36 @@ public struct Network
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 3rd layer
-        hidden = LinearOp<half, 64, 64>(
+        // decoder transform frame 4th layer
+        CoopVec<half, 24> transformFrameInput;
+        transformFrameInput = LinearOp<half, 24, 64>(
             hidden,
             decoderParameters,
             uint2(weightOffsets[3], biasOffsets[3]),
             matrixLayout,
             componentType);
-        hidden = act.eval(hidden);
+        transformFrameInput = tanh(transformFrameInput);
 
-        // decoder 4th layer
-        hidden = LinearOp<half, 64, 64>(
-            hidden,
+        CoopVec<half, 60> transformFrameOutput;
+        transformFrameOutput = transformFrameFunc(
+            transformFrameInput, wo, v1, v2, v3, v4);
+
+        // decoder input
+        CoopVec<half, 68> decoderInputParams;
+        decoderInputParams = combineLatentVectorAndTransformFrame(
+            latentVector,
+            transformFrameOutput);
+
+        // decoder 1st layer
+        hidden = LinearOp<half, 64, 68>(
+            decoderInputParams,
             decoderParameters,
             uint2(weightOffsets[4], biasOffsets[4]),
             matrixLayout,
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 5th layer
+        // decoder 2nd layer
         hidden = LinearOp<half, 64, 64>(
             hidden,
             decoderParameters,
@@ -191,7 +213,7 @@ public struct Network
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 6th layer
+        // decoder 3rd layer
         hidden = LinearOp<half, 64, 64>(
             hidden,
             decoderParameters,
@@ -200,14 +222,50 @@ public struct Network
             componentType);
         hidden = act.eval(hidden);
 
-        // decoder 7th layer
-        output = LinearOp<half, 3, 64>(
+        // decoder 4th layer
+        hidden = LinearOp<half, 64, 64>(
             hidden,
             decoderParameters,
             uint2(weightOffsets[7], biasOffsets[7]),
             matrixLayout,
             componentType);
-        output = decoderFinalAct.eval(output - CoopVec<half, 3>(3.0, 3.0, 3.0));
+        hidden = act.eval(hidden);
+
+        // decoder 5th layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            decoderParameters,
+            uint2(weightOffsets[8], biasOffsets[8]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 6th layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            decoderParameters,
+            uint2(weightOffsets[9], biasOffsets[9]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 7th layer
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
+            decoderParameters,
+            uint2(weightOffsets[10], biasOffsets[10]),
+            matrixLayout,
+            componentType);
+        hidden = act.eval(hidden);
+
+        // decoder 8th layer
+        output = LinearOp<half, 3, 64>(
+            hidden,
+            decoderParameters,
+            uint2(weightOffsets[11], biasOffsets[11]),
+            matrixLayout,
+            componentType);
+        output = exp(output - CoopVec<half, 3>(3.0, 3.0, 3.0));
 
         // // decoder 4th layer
         // output = LinearOp<half, 3, 64>(
@@ -222,6 +280,6 @@ public struct Network
     }
 
     MatrixBiasBuffer<half> decoderParameters;
-    uint[8] weightOffsets;
-    uint[8] biasOffsets;
+    uint[12] weightOffsets;
+    uint[12] biasOffsets;
 }

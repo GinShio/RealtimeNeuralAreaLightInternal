@@ -261,7 +261,6 @@ void main(uint3 tid: SV_DispatchThreadID)
         materialData[materialBaseIndex + 5],
         materialData[materialBaseIndex + 6],
         materialData[materialBaseIndex + 7]);
-    normal = normalize(normal * 2.0 - 1.0);
 
     // sample wi and wo
     float3 wi;

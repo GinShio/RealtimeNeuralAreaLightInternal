@@ -326,6 +326,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     // let metallic = 1.0;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
+    normal = normalize(normal * 2.0 - 1.0);
 
     // sample wi and wo
     float3 wi;
@@ -335,7 +336,7 @@ void main(uint3 tid: SV_DispatchThreadID)
         baseColor,
         roughness,
         metallic,
-        normalize(normal * 2 - 1),
+        normal,
         wi,
         wo);
 

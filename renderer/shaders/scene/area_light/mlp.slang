@@ -45,8 +45,10 @@ struct PushConstants
     float4x4 model;
     uint4 weightOffsets0;
     uint4 weightOffsets1;
+    uint4 weightOffsets2;
     uint4 biasOffsets0;
     uint4 biasOffsets1;
+    uint4 biasOffsets2;
     uint latentTexture0Index;
     uint latentTexture1Index;
 }
@@ -159,8 +161,10 @@ func fsMain(input: VertexOutput)->FragmentOutput
         params,
         pc.weightOffsets0,
         pc.weightOffsets1,
+        pc.weightOffsets2,
         pc.biasOffsets0,
-        pc.biasOffsets1);
+        pc.biasOffsets1,
+        pc.biasOffsets2);
 
     let normal = normalize(input.viewNormal);
     let tangent = normalize(input.viewTangent.xyz);

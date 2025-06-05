@@ -291,10 +291,9 @@ class Encoder(nn.Module):
 
 
 def transform_frame_function(transform_input, wo, v1, v2, v3, v4):
-    # transform_input: (B, 12)
-    B = transform_input.shape[0]
+    # transform_input: (B, 24)
     result = []
-    for i in range(2):
+    for i in range(4):
         normal = transform_input[:, i * 6 + 0 : i * 6 + 3]  # (B, 3)
         tangent = transform_input[:, i * 6 + 3 : i * 6 + 6]  # (B, 3)
         bitangent = torch.cross(normal, tangent, dim=-1)  # (B, 3)
@@ -314,15 +313,19 @@ def transform_frame_function(transform_input, wo, v1, v2, v3, v4):
         result.append(v3_tbn)
         result.append(v4_tbn)
 
-    return torch.cat(result, dim=-1)  # (B, 30)
+    return torch.cat(result, dim=-1)  # (B, 60)
 
 
 class Decoder(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.fc1 = nn.Linear(8, 12)
-        self.fc2 = nn.Linear(8 + 30, 64)
+        self.fct1 = nn.Linear(8, 64)
+        self.fct2 = nn.Linear(64, 64)
+        self.fct3 = nn.Linear(64, 64)
+        self.fct4 = nn.Linear(64, 24)
+        self.fc1 = nn.Linear(8 + 60, 64)
+        self.fc2 = nn.Linear(64, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 64)
         self.fc5 = nn.Linear(64, 64)
@@ -333,9 +336,13 @@ class Decoder(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, latent, wo, v1, v2, v3, v4):
-        tf_input = self.tanh(self.fc1(latent))  # (B, 12)
-        tf_output = transform_frame_function(tf_input, wo, v1, v2, v3, v4)  # (B, 30)
-        x = torch.cat([latent, tf_output], dim=-1)  # (B, 38)
+        tf_input = self.relu(self.fct1(latent))  # (B, 64)
+        tf_input = self.relu(self.fct2(tf_input))  # (B, 64)
+        tf_input = self.relu(self.fct3(tf_input))  # (B, 64)
+        tf_input = self.tanh(self.fct4(tf_input))  # (B, 24)
+        tf_output = transform_frame_function(tf_input, wo, v1, v2, v3, v4)  # (B, 60)
+        x = torch.cat([latent, tf_output], dim=-1)  # (B, 68)
+        x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
@@ -389,6 +396,10 @@ def save_model_as_json(model, path):
     model_json = {
         "model": {
             "layers": [
+                layer_to_json(model.fct1),
+                layer_to_json(model.fct2),
+                layer_to_json(model.fct3),
+                layer_to_json(model.fct4),
                 layer_to_json(model.fc1),
                 layer_to_json(model.fc2),
                 layer_to_json(model.fc3),
@@ -727,8 +738,8 @@ def train(steps):
     data_dir = "data/pbr-simple"
     output_dir = "output/pbr-simple"
 
-    lr_first = 1e-4
-    lr_second = 1e-5
+    lr_first = 1e-3
+    lr_second = 1e-3
 
     config = {
         "steps": steps,
