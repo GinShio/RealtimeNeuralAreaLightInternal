@@ -15,6 +15,7 @@ import "brdf";
 struct PushConstants
 {
     uint64_t seed;
+    float roughnessClippingScale;
 }
 
 [[push_constant]]
@@ -54,38 +55,61 @@ func tangentFrame(normal: float3)->float3x3
     return float3x3(tangent, bitangent, normal);
 }
 
+func modifyWi(inout rng: PCG32, rad: float, wi: float3)->float3
+{
+    let cosThetaMax = cos(rad);
+
+    let cosTheta = sqrt(1.0 - rng.nextFloat() * (1.0 - cosThetaMax * cosThetaMax));
+    let sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    let phi = 2.0 * PI * rng.nextFloat();
+    let localDir = float3(
+        sinTheta * cos(phi),
+        sinTheta * sin(phi),
+        cosTheta);
+
+    let TBN = transpose(tangentFrame(wi));
+    let modifiedWi = mul(TBN, localDir);
+
+    return normalize(modifiedWi);
+}
+
+// ランダムに半球状から出射方向woを計算する。
+// 入射方向をBRDFサンプリングしてその方向を適当にずらした値を返す。
 func sampleWiWo(
     inout rng: PCG32,
+    omegaRatio: float, // 面光源の大きさ立体角
+    baseColor: float3,
+    roughness: float,
+    metallic: float,
+    normal: float3,
     out wi: float3,
     out wo: float3)
 {
+    let zH = rng.nextFloat();
+    let rH = sqrt(1.0 - zH * zH);
+    let phiH = 2.0 * PI * rng.nextFloat();
+    wo = normalize(float3(
+        rH * cos(phiH),
+        rH * sin(phiH),
+        zH));
+
     for (var i = 0; i < 10; ++i)
     {
-        let zH = rng.nextFloat();
-        let rH = sqrt(1.0 - zH * zH);
-        let phiH = 2.0 * PI * rng.nextFloat();
-        let H = float3(
-            rH * cos(phiH),
-            rH * sin(phiH),
-            zH);
-
-        let zDelta = 2.0 * rng.nextFloat() - 1.0;
-        let rDelta = sqrt(1.0 - zDelta * zDelta);
-        let phiDelta = 2.0 * PI * rng.nextFloat();
-        let delta = float3(
-            rDelta * cos(phiDelta),
-            rDelta * sin(phiDelta),
-            zDelta);
-
-        let M = transpose(tangentFrame(H));
-        let d = mul(M, delta);
-
-        wi = normalize(d);
-        wo = normalize(2.0 * dot(wi, H) * H - wi);
-
-        if (wo.z >= 0.0)
+        float pdf;
+        SamplePbrBRDF(
+            rng,
+            baseColor,
+            roughness,
+            metallic,
+            normal,
+            wo,
+            wi,
+            pdf);
+        let rad = asin(omegaRatio * omegaRatio) / 2;
+        modifyWi(rng, rad, wi);
+        if (pdf > 0.0)
         {
-            return;
+            return; // 成功
         }
     }
 }
@@ -101,6 +125,12 @@ func sampleMipLevel(u: float, mipCount: int)->float
     let l_max = float(mipCount - 1);
     let l = -log(1.0 - u) / bias;
     return clamp(l, 0.0, l_max);
+}
+
+func roughnessClipping(roughness: float)->float
+{
+    let clipValue = 0.1 * pc.roughnessClippingScale;
+    return max(roughness, clipValue);
 }
 
 func srgbToLinear(color: float3)->float3
@@ -164,8 +194,9 @@ func computeDistribution(
         let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uvM, mipLevelFloor).rgb);
         // let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
         // let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
-        let roughness = 0.01;
+        var roughness = 0.01;
         let metallic = 1.0;
+        roughness = roughnessClipping(roughness);
 
         var normalTex = normalSampler.SampleLevel(uvM, mipLevelFloor).xyz;
         normalTex.y = 1.0 - normalTex.y; // Y 反転
@@ -246,13 +277,10 @@ func computeDistribution(
     return D;
 }
 
-func log1p4(x: float)->float
+func log1pScale(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
+    ret = log(1.0 + ret / 3.0);
     return ret;
 }
 
@@ -264,11 +292,6 @@ void main(uint3 tid: SV_DispatchThreadID)
         return;
 
     PCG32 rng = PCG32(pc.seed, i);
-
-    // sample wi and wo
-    float3 wi;
-    float3 wo;
-    sampleWiWo(rng, wi, wo);
 
     // sample uv
     let uv = float2(rng.nextFloat(), rng.nextFloat());
@@ -283,11 +306,19 @@ void main(uint3 tid: SV_DispatchThreadID)
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
 
+    // 面光源のサイズを決定する乱数。
+    float omegaRatio = rng.nextFloat();
+
+    // sample wi and wo
+    float3 wi;
+    float3 wo;
+    sampleWiWo(rng, omegaRatio, baseColor, roughness, metallic, normal, wi, wo);
+
     float3 v1;
     float3 v2;
     float3 v3;
     float3 v4;
-    sampleDirection(rng, wi, v1, v2, v3, v4);
+    sampleDirection(rng, wi, omegaRatio, v1, v2, v3, v4);
 
     // compute D
     let D = computeDistribution(
@@ -322,7 +353,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 20] = half(v4.x);
     data[index + 21] = half(v4.y);
     data[index + 22] = half(v4.z);
-    data[index + 23] = half(log1p4(D.x));
-    data[index + 24] = half(log1p4(D.y));
-    data[index + 25] = half(log1p4(D.z));
+    data[index + 23] = half(log1pScale(D.x));
+    data[index + 24] = half(log1pScale(D.y));
+    data[index + 25] = half(log1pScale(D.z));
 }

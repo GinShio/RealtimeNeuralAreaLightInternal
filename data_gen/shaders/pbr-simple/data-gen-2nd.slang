@@ -45,38 +45,61 @@ func tangentFrame(normal: float3)->float3x3
     return float3x3(tangent, bitangent, normal);
 }
 
+func modifyWi(inout rng: PCG32, rad: float, wi: float3)->float3
+{
+    let cosThetaMax = cos(rad);
+
+    let cosTheta = sqrt(1.0 - rng.nextFloat() * (1.0 - cosThetaMax * cosThetaMax));
+    let sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    let phi = 2.0 * PI * rng.nextFloat();
+    let localDir = float3(
+        sinTheta * cos(phi),
+        sinTheta * sin(phi),
+        cosTheta);
+
+    let TBN = transpose(tangentFrame(wi));
+    let modifiedWi = mul(TBN, localDir);
+
+    return normalize(modifiedWi);
+}
+
+// ランダムに半球状から出射方向woを計算する。
+// 入射方向をBRDFサンプリングしてその方向を適当にずらした値を返す。
 func sampleWiWo(
     inout rng: PCG32,
+    omegaRatio: float, // 面光源の大きさ立体角
+    baseColor: float3,
+    roughness: float,
+    metallic: float,
+    normal: float3,
     out wi: float3,
     out wo: float3)
 {
+    let zH = rng.nextFloat();
+    let rH = sqrt(1.0 - zH * zH);
+    let phiH = 2.0 * PI * rng.nextFloat();
+    wo = normalize(float3(
+        rH * cos(phiH),
+        rH * sin(phiH),
+        zH));
+
     for (var i = 0; i < 10; ++i)
     {
-        let zH = rng.nextFloat();
-        let rH = sqrt(1.0 - zH * zH);
-        let phiH = 2.0 * PI * rng.nextFloat();
-        let H = float3(
-            rH * cos(phiH),
-            rH * sin(phiH),
-            zH);
-
-        let zDelta = 2.0 * rng.nextFloat() - 1.0;
-        let rDelta = sqrt(1.0 - zDelta * zDelta);
-        let phiDelta = 2.0 * PI * rng.nextFloat();
-        let delta = float3(
-            rDelta * cos(phiDelta),
-            rDelta * sin(phiDelta),
-            zDelta);
-
-        let M = transpose(tangentFrame(H));
-        let d = mul(M, delta);
-
-        wi = normalize(d);
-        wo = normalize(2.0 * dot(wi, H) * H - wi);
-
-        if (wo.z >= 0.0)
+        float pdf;
+        SamplePbrBRDF(
+            rng,
+            baseColor,
+            roughness,
+            metallic,
+            normal,
+            wo,
+            wi,
+            pdf);
+        let rad = asin(omegaRatio * omegaRatio) / 2;
+        modifyWi(rng, rad, wi);
+        if (pdf > 0.0)
         {
-            return;
+            return; // 成功
         }
     }
 }
@@ -189,13 +212,10 @@ func computeDistribution(
     return D;
 }
 
-func log1p4(x: float)->float
+func log1pScale(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
+    ret = log(1.0 + ret / 3.0);
     return ret;
 }
 
@@ -207,11 +227,6 @@ void main(uint3 tid: SV_DispatchThreadID)
         return;
 
     PCG32 rng = PCG32(pc.seed, i);
-
-    // sample wi and wo
-    float3 wi;
-    float3 wo;
-    sampleWiWo(rng, wi, wo);
 
     // sample parameters
     let materialBaseIndex = (i % uniforms.pixelCount) * 8;
@@ -227,11 +242,19 @@ void main(uint3 tid: SV_DispatchThreadID)
         materialData[materialBaseIndex + 7]);
     normal = normalize(normal * 2.0 - 1.0);
 
+    // 面光源のサイズを決定する乱数。
+    float omegaRatio = rng.nextFloat();
+
+    // sample wi and wo
+    float3 wi;
+    float3 wo;
+    sampleWiWo(rng, omegaRatio, baseColor, roughness, metallic, normal, wi, wo);
+
     float3 v1;
     float3 v2;
     float3 v3;
     float3 v4;
-    sampleDirection(rng, wi, v1, v2, v3, v4);
+    sampleDirection(rng, wi, omegaRatio, v1, v2, v3, v4);
 
     // compute D
     let D = computeDistribution(
@@ -260,7 +283,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 12] = half(v4.x);
     data[index + 13] = half(v4.y);
     data[index + 14] = half(v4.z);
-    data[index + 15] = half(log1p4(D.x));
-    data[index + 16] = half(log1p4(D.y));
-    data[index + 17] = half(log1p4(D.z));
+    data[index + 15] = half(log1pScale(D.x));
+    data[index + 16] = half(log1pScale(D.y));
+    data[index + 17] = half(log1pScale(D.z));
 }

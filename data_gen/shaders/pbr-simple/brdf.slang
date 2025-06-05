@@ -85,7 +85,7 @@ func cosineSampleHemisphere(inout rng: PCG32)->float3
     float φ = 2.0 * PI * rng.nextFloat();
     float x = r * cos(φ);
     float y = r * sin(φ);
-    float z = sqrt(max(0.0, 1.0 - x * x - y * y));
+    float z = sqrt(max(0.0, 1.0 - r * r));
     return float3(x, y, z); // ローカル空間 (+Z が法線)
 }
 

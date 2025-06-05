@@ -2,8 +2,17 @@ import "../rtxns/PCG32";
 
 func intersectZPlane(float3 p1, float3 p2)->float3
 {
-    let t = -p1.z / max(p2.z - p1.z, 1e-5); // avoid div 0
-    return lerp(p1, p2, saturate(t));
+    // clip with the z = 0.01 plane
+    if (p1.z > 0.0 && p2.z <= 0.0)
+    {
+        let t = (0.01 - p1.z) / max(p1.z - p2.z, 1e-8);
+        return lerp(p1, p2, saturate(t));
+    }
+    else
+    {
+        let t = (0.01 - p2.z) / max(p2.z - p1.z, 1e-8);
+        return lerp(p2, p1, saturate(t));
+    }
 }
 
 func clipQuadAgainstZPlane(float3 quad[4], out float3 clipped[5], out int outCount)

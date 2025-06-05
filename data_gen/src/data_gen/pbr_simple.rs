@@ -29,7 +29,8 @@ struct UniformBuffer {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct FirstPhasePushConstants {
     seed: u64,
-    _padding: [u32; 2],
+    roughness_clipping_scale: f32,
+    _padding: u32,
 }
 
 #[repr(C)]
@@ -48,6 +49,7 @@ pub fn data_gen(
     texture_size: u32,
     batch_size: u64,
     first_phase_shard_size: u64,
+    roughness_clipping_shard_count: u64,
     first_phase_shard_count: u64,
     second_phase_shard_size: u64,
     second_phase_shard_count: u64,
@@ -64,6 +66,7 @@ pub fn data_gen(
         "texture_size": texture_size,
         "batch_size": batch_size,
         "first_phase_shard_size": first_phase_shard_size,
+        "roughness_clipping_shard_count": roughness_clipping_shard_count,
         "first_phase_shard_count": first_phase_shard_count,
         "second_phase_shard_size": second_phase_shard_size,
         "second_phase_shard_count": second_phase_shard_count,
@@ -634,7 +637,8 @@ pub fn data_gen(
     // Generate first phase data
     println!(
         "  First phase data generation: {} shards, {} floats per shard",
-        first_phase_shard_count, first_shard_buffer_size
+        roughness_clipping_shard_count + first_phase_shard_count,
+        first_shard_buffer_size
     );
     std::io::stdout().flush().expect("Failed to flush stdout");
     let first_start = std::time::Instant::now();
@@ -656,23 +660,40 @@ pub fn data_gen(
         let output_dir = output_dir.to_owned();
         move || {
             while let Ok((i, data)) = rx.recv() {
-                let mut file =
-                    File::create(output_dir.join(format!("first_phase_data.shard-{}.bin", i)))
-                        .unwrap();
+                let mut file = File::create(output_dir.join(format!(
+                    "first_phase_data{}.shard-{}.bin",
+                    if i < roughness_clipping_shard_count {
+                        "-roughness-clipped"
+                    } else {
+                        ""
+                    },
+                    if i < roughness_clipping_shard_count {
+                        i
+                    } else {
+                        i - roughness_clipping_shard_count
+                    }
+                )))
+                .unwrap();
                 file.write_all(&data)
                     .expect("Failed to write first phase data shard");
             }
         }
     });
 
-    for i in 0..first_phase_shard_count {
+    for i in 0..(first_phase_shard_count + roughness_clipping_shard_count) {
         let step_start = std::time::Instant::now();
 
         let seed: u64 = rng.random();
 
+        let roughness_clipping_scale = if i < roughness_clipping_shard_count {
+            1.0 - i as f32 / roughness_clipping_shard_count as f32
+        } else {
+            0.0
+        };
         let push_constants = FirstPhasePushConstants {
             seed,
-            _padding: [0; 2],
+            roughness_clipping_scale,
+            _padding: 0,
         };
 
         unsafe {

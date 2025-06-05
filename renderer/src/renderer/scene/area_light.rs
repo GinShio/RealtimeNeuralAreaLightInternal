@@ -455,9 +455,9 @@ impl AreaLightScene {
             state,
             texture_manager,
             "assets/pbr-simple/plane/plane.glb",
-            "network/pbr-simple/network.json",
-            "network/pbr-simple/latent-texture-0.exr",
-            "network/pbr-simple/latent-texture-1.exr",
+            "network/pbr-simple/pre/network.json",
+            "network/pbr-simple/pre/latent-texture-0.exr",
+            "network/pbr-simple/pre/latent-texture-1.exr",
             network_descriptor_pool,
             network_descriptor_set_layout,
         )?];

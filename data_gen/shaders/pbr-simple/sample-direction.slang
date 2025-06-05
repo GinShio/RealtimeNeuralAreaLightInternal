@@ -53,6 +53,7 @@ inline void buildONB(float3 n, out float3 t, out float3 b)
 func sampleDirection(
     inout rng: PCG32,
     wi: float3, // 中心方向（from P to rectangle centre）
+    omegaRatio: float,
     out v1: float3,
     out v2: float3,
     out v3: float3,
@@ -97,8 +98,7 @@ func sampleDirection(
                          : (4.0f * kK2 * gamma);
 
     // 2-3) Ω を一様サンプリング
-    float uO = rng.nextFloat();  // [0,1)
-    float omega = omegaMax * uO; // Ω ∈ [0, Ω_max)
+    float omega = omegaMax * omegaRatio; // Ω ∈ [0, Ω_max)
 
     // 2-4) 半角を求める
     float sinAx = sqrt(omega * gamma * 0.25f);  // √(Ωγ/4)
