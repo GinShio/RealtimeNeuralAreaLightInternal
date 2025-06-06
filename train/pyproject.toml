@@ -5,6 +5,7 @@ description = "PyTorch training with GPU support using CUDA"
 requires-python = ">=3.11"
 
 dependencies = [
+    "torch==2.7.1+cu128",
     "numpy",
     "tqdm",
     "OpenEXR",
@@ -15,3 +16,13 @@ dependencies = [
 
 [tool.ruff]
 line-length = 120
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu128" },
+]
