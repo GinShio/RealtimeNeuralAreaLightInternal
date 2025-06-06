@@ -210,7 +210,8 @@ func computeDistribution(
         let uvM = addGaussianOffset(rng, uv, mipLevelFloor);
 
         let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uvM, mipLevelFloor).rgb);
-        let roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
+        var roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
+        roughness *= 0.1;
         let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
         // var roughness = 0.01;
         // let metallic = 1.0;
@@ -320,7 +321,8 @@ void main(uint3 tid: SV_DispatchThreadID)
 
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
-    let roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    var roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
+    roughness *= 0.1;
     let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
     // let roughness = 0.01;
     // let metallic = 1.0;
