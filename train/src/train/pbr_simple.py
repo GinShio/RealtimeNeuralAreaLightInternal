@@ -736,7 +736,7 @@ def train_second_phase(
     wandb.log(
         {
             "step": step,
-            "2nd phase/loss": loss.item(),
+            "2nd phase/loss": loss,
         }
     )
 
