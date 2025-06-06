@@ -65,66 +65,31 @@ public struct Network
     }
 
     private static func transformFrameFunc(
-        transformFrameInput: CoopVec<half, 60>,
+        transformFrameInput: CoopVec<half, 24>,
         wo: float3,
         v1: float3,
         v2: float3,
         v3: float3,
         v4: float3)
-        ->CoopVec<half, 30>
+        ->CoopVec<half, 60>
     {
-        CoopVec<half, 30> result;
-        for (var i = 0; i < 2; i++)
+        CoopVec<half, 60> result;
+        for (var i = 0; i < 4; i++)
         {
-            var wo_normal = float3(
-                transformFrameInput[i * 30 + 0],
-                transformFrameInput[i * 30 + 1],
-                transformFrameInput[i * 30 + 2]);
-            var wo_tangent = float3(
-                transformFrameInput[i * 30 + 3],
-                transformFrameInput[i * 30 + 4],
-                transformFrameInput[i * 30 + 5]);
-            let woTBN = transformComponentFunc(wo_normal, wo_tangent, wo);
+            var normal = float3(
+                transformFrameInput[i * 6 + 0],
+                transformFrameInput[i * 6 + 1],
+                transformFrameInput[i * 6 + 2]);
+            var tangent = float3(
+                transformFrameInput[i * 6 + 3],
+                transformFrameInput[i * 6 + 4],
+                transformFrameInput[i * 6 + 5]);
 
-            var v1_normal = float3(
-                transformFrameInput[i * 30 + 6],
-                transformFrameInput[i * 30 + 7],
-                transformFrameInput[i * 30 + 8]);
-            var v1_tangent = float3(
-                transformFrameInput[i * 30 + 9],
-                transformFrameInput[i * 30 + 10],
-                transformFrameInput[i * 30 + 11]);
-            let v1TBN = transformComponentFunc(v1_normal, v1_tangent, v1);
-
-            var v2_normal = float3(
-                transformFrameInput[i * 30 + 12],
-                transformFrameInput[i * 30 + 13],
-                transformFrameInput[i * 30 + 14]);
-            var v2_tangent = float3(
-                transformFrameInput[i * 30 + 15],
-                transformFrameInput[i * 30 + 16],
-                transformFrameInput[i * 30 + 17]);
-            let v2TBN = transformComponentFunc(v2_normal, v2_tangent, v2);
-
-            var v3_normal = float3(
-                transformFrameInput[i * 30 + 18],
-                transformFrameInput[i * 30 + 19],
-                transformFrameInput[i * 30 + 20]);
-            var v3_tangent = float3(
-                transformFrameInput[i * 30 + 21],
-                transformFrameInput[i * 30 + 22],
-                transformFrameInput[i * 30 + 23]);
-            let v3TBN = transformComponentFunc(v3_normal, v3_tangent, v3);
-
-            var v4_normal = float3(
-                transformFrameInput[i * 30 + 24],
-                transformFrameInput[i * 30 + 25],
-                transformFrameInput[i * 30 + 26]);
-            var v4_tangent = float3(
-                transformFrameInput[i * 30 + 27],
-                transformFrameInput[i * 30 + 28],
-                transformFrameInput[i * 30 + 29]);
-            let v4TBN = transformComponentFunc(v4_normal, v4_tangent, v4);
+            let woTBN = transformComponentFunc(normal, tangent, wo);
+            let v1TBN = transformComponentFunc(normal, tangent, v1);
+            let v2TBN = transformComponentFunc(normal, tangent, v2);
+            let v3TBN = transformComponentFunc(normal, tangent, v3);
+            let v4TBN = transformComponentFunc(normal, tangent, v4);
 
             result[i * 15 + 0] = half(woTBN.x);
             result[i * 15 + 1] = half(woTBN.y);
@@ -147,15 +112,15 @@ public struct Network
 
     private static func combineLatentVectorAndTransformFrame(
         latentVector: CoopVec<half, 8>,
-        transformFrameOutput: CoopVec<half, 30>)
-        ->CoopVec<half, 38>
+        transformFrameOutput: CoopVec<half, 60>)
+        ->CoopVec<half, 68>
     {
-        CoopVec<half, 38> result;
+        CoopVec<half, 68> result;
         for (var i = 0; i < 8; i++)
         {
             result[i] = latentVector[i];
         }
-        for (var i = 0; i < 30; i++)
+        for (var i = 0; i < 60; i++)
         {
             result[i + 8] = transformFrameOutput[i];
         }
@@ -172,15 +137,15 @@ public struct Network
         v4: float3, )
         ->CoopVec<half, 3>
     {
-        let act128 = rtxns::mlp::ReLUAct<half, 128>();
         let act = rtxns::mlp::ReLUAct<half, 64>();
+        let act128 = rtxns::mlp::ReLUAct<half, 128>();
         let matrixLayout = CoopVecMatrixLayout::InferencingOptimal;
         let componentType = CoopVecComponentType::Float16;
 
         using rtxns::mlp;
 
+        CoopVec<half, 64> hidden;
         CoopVec<half, 128> hidden128;
-        CoopVec<half, 64> hidden64;
 
         // decoder
         CoopVec<half, 3> output;
@@ -213,8 +178,8 @@ public struct Network
         hidden128 = act128.eval(hidden128);
 
         // decoder transform frame 4th layer
-        CoopVec<half, 60> transformFrameInput;
-        transformFrameInput = LinearOp<half, 60, 128>(
+        CoopVec<half, 24> transformFrameInput;
+        transformFrameInput = LinearOp<half, 24, 128>(
             hidden128,
             decoderParameters,
             uint2(weightOffsets[3], biasOffsets[3]),
@@ -222,82 +187,82 @@ public struct Network
             componentType);
         transformFrameInput = tanh(transformFrameInput);
 
-        CoopVec<half, 30> transformFrameOutput;
+        CoopVec<half, 60> transformFrameOutput;
         transformFrameOutput = transformFrameFunc(
             transformFrameInput, wo, v1, v2, v3, v4);
 
         // decoder input
-        CoopVec<half, 38> decoderInputParams;
+        CoopVec<half, 68> decoderInputParams;
         decoderInputParams = combineLatentVectorAndTransformFrame(
             latentVector,
             transformFrameOutput);
 
         // decoder 1st layer
-        hidden64 = LinearOp<half, 64, 38>(
+        hidden = LinearOp<half, 64, 68>(
             decoderInputParams,
             decoderParameters,
             uint2(weightOffsets[4], biasOffsets[4]),
             matrixLayout,
             componentType);
-        hidden64 = act.eval(hidden64);
+        hidden = act.eval(hidden);
 
         // decoder 2nd layer
-        hidden64 = LinearOp<half, 64, 64>(
-            hidden64,
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
             decoderParameters,
             uint2(weightOffsets[5], biasOffsets[5]),
             matrixLayout,
             componentType);
-        hidden64 = act.eval(hidden64);
+        hidden = act.eval(hidden);
 
         // decoder 3rd layer
-        hidden64 = LinearOp<half, 64, 64>(
-            hidden64,
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
             decoderParameters,
             uint2(weightOffsets[6], biasOffsets[6]),
             matrixLayout,
             componentType);
-        hidden64 = act.eval(hidden64);
+        hidden = act.eval(hidden);
 
         // decoder 4th layer
-        hidden64 = LinearOp<half, 64, 64>(
-            hidden64,
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
             decoderParameters,
             uint2(weightOffsets[7], biasOffsets[7]),
             matrixLayout,
             componentType);
-        hidden64 = act.eval(hidden64);
+        hidden = act.eval(hidden);
 
         // decoder 5th layer
-        hidden64 = LinearOp<half, 64, 64>(
-            hidden64,
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
             decoderParameters,
             uint2(weightOffsets[8], biasOffsets[8]),
             matrixLayout,
             componentType);
-        hidden64 = act.eval(hidden64);
+        hidden = act.eval(hidden);
 
         // decoder 6th layer
-        hidden64 = LinearOp<half, 64, 64>(
-            hidden64,
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
             decoderParameters,
             uint2(weightOffsets[9], biasOffsets[9]),
             matrixLayout,
             componentType);
-        hidden64 = act.eval(hidden64);
+        hidden = act.eval(hidden);
 
         // decoder 7th layer
-        hidden64 = LinearOp<half, 64, 64>(
-            hidden64,
+        hidden = LinearOp<half, 64, 64>(
+            hidden,
             decoderParameters,
             uint2(weightOffsets[10], biasOffsets[10]),
             matrixLayout,
             componentType);
-        hidden64 = act.eval(hidden64);
+        hidden = act.eval(hidden);
 
         // decoder 8th layer
         output = LinearOp<half, 3, 64>(
-            hidden64,
+            hidden,
             decoderParameters,
             uint2(weightOffsets[11], biasOffsets[11]),
             matrixLayout,
