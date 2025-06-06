@@ -110,7 +110,7 @@ impl ApplicationHandler for App {
                         .expect("Failed to resize");
                 }
                 if let Some(window) = &mut self.window {
-                    window.request_inner_size(size).unwrap();
+                    let _ = window.request_inner_size(size);
                 }
             }
             WindowEvent::RedrawRequested => {

@@ -291,21 +291,43 @@ class Encoder(nn.Module):
 
 
 def transform_frame_function(transform_input, wo, v1, v2, v3, v4):
-    # transform_input: (B, 24)
+    # transform_input: (B, 60)
     result = []
-    for i in range(4):
-        normal = transform_input[:, i * 6 + 0 : i * 6 + 3]  # (B, 3)
-        tangent = transform_input[:, i * 6 + 3 : i * 6 + 6]  # (B, 3)
-        bitangent = torch.cross(normal, tangent, dim=-1)  # (B, 3)
+    for i in range(2):
+        wo_normal = transform_input[:, i * 30 + 0 : i * 30 + 3]  # (B, 3)
+        wo_tangent = transform_input[:, i * 30 + 3 : i * 30 + 6]  # (B, 3)
+        wo_bitangent = torch.cross(wo_normal, wo_tangent, dim=-1)  # (B, 3)
+        wo_TBN = torch.stack([wo_tangent, wo_bitangent, wo_normal], dim=-1)  # (B, 3, 3)
+        wo_TBN = wo_TBN.transpose(1, 2)  # (B, 3, 3)
+        wo_tbn = torch.bmm(wo_TBN, wo.unsqueeze(-1)).squeeze(-1)  # (B, 3)
 
-        TBN = torch.stack([tangent, bitangent, normal], dim=-1)  # (B, 3, 3)
-        TBN = TBN.transpose(1, 2)  # (B, 3, 3)
+        v1_normal = transform_input[:, i * 30 + 6 : i * 30 + 9]  # (B, 3)
+        v1_tangent = transform_input[:, i * 30 + 9 : i * 30 + 12]  # (B, 3)
+        v1_bitangent = torch.cross(v1_normal, v1_tangent, dim=-1)  # (B, 3)
+        v1_TBN = torch.stack([v1_tangent, v1_bitangent, v1_normal], dim=-1)  # (B, 3, 3)
+        v1_TBN = v1_TBN.transpose(1, 2)  # (B, 3, 3)
+        v1_tbn = torch.bmm(v1_TBN, v1.unsqueeze(-1)).squeeze(-1)  # (B, 3)
 
-        wo_tbn = torch.bmm(TBN, wo.unsqueeze(-1)).squeeze(-1)  # (B, 3)
-        v1_tbn = torch.bmm(TBN, v1.unsqueeze(-1)).squeeze(-1)  # (B, 3)
-        v2_tbn = torch.bmm(TBN, v2.unsqueeze(-1)).squeeze(-1)  # (B, 3)
-        v3_tbn = torch.bmm(TBN, v3.unsqueeze(-1)).squeeze(-1)  # (B, 3)
-        v4_tbn = torch.bmm(TBN, v4.unsqueeze(-1)).squeeze(-1)  # (B, 3)
+        v2_normal = transform_input[:, i * 30 + 12 : i * 30 + 15]  # (B, 3)
+        v2_tangent = transform_input[:, i * 30 + 15 : i * 30 + 18]  # (B, 3)
+        v2_bitangent = torch.cross(v2_normal, v2_tangent, dim=-1)  # (B, 3)
+        v2_TBN = torch.stack([v2_tangent, v2_bitangent, v2_normal], dim=-1)  # (B, 3, 3)
+        v2_TBN = v2_TBN.transpose(1, 2)  # (B, 3, 3)
+        v2_tbn = torch.bmm(v2_TBN, v2.unsqueeze(-1)).squeeze(-1)  # (B, 3)
+
+        v3_normal = transform_input[:, i * 30 + 18 : i * 30 + 21]  # (B, 3)
+        v3_tangent = transform_input[:, i * 30 + 21 : i * 30 + 24]  # (B, 3)
+        v3_bitangent = torch.cross(v3_normal, v3_tangent, dim=-1)  # (B, 3)
+        v3_TBN = torch.stack([v3_tangent, v3_bitangent, v3_normal], dim=-1)  # (B, 3, 3)
+        v3_TBN = v3_TBN.transpose(1, 2)  # (B, 3, 3)
+        v3_tbn = torch.bmm(v3_TBN, v3.unsqueeze(-1)).squeeze(-1)  # (B, 3)
+
+        v4_normal = transform_input[:, i * 30 + 24 : i * 30 + 27]  # (B, 3)
+        v4_tangent = transform_input[:, i * 30 + 27 : i * 30 + 30]  # (B, 3)
+        v4_bitangent = torch.cross(v4_normal, v4_tangent, dim=-1)  # (B, 3)
+        v4_TBN = torch.stack([v4_tangent, v4_bitangent, v4_normal], dim=-1)  # (B, 3, 3)
+        v4_TBN = v4_TBN.transpose(1, 2)  # (B, 3, 3)
+        v4_tbn = torch.bmm(v4_TBN, v4.unsqueeze(-1)).squeeze(-1)  # (B, 3)
 
         result.append(wo_tbn)
         result.append(v1_tbn)
@@ -313,18 +335,18 @@ def transform_frame_function(transform_input, wo, v1, v2, v3, v4):
         result.append(v3_tbn)
         result.append(v4_tbn)
 
-    return torch.cat(result, dim=-1)  # (B, 60)
+    return torch.cat(result, dim=-1)  # (B, 30)
 
 
 class Decoder(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.fct1 = nn.Linear(8, 64)
-        self.fct2 = nn.Linear(64, 64)
-        self.fct3 = nn.Linear(64, 64)
-        self.fct4 = nn.Linear(64, 24)
-        self.fc1 = nn.Linear(8 + 60, 64)
+        self.fct1 = nn.Linear(8, 128)
+        self.fct2 = nn.Linear(128, 128)
+        self.fct3 = nn.Linear(128, 128)
+        self.fct4 = nn.Linear(128, 60)
+        self.fc1 = nn.Linear(8 + 30, 64)
         self.fc2 = nn.Linear(64, 64)
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, 64)
@@ -336,12 +358,12 @@ class Decoder(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, latent, wo, v1, v2, v3, v4):
-        tf_input = self.relu(self.fct1(latent))  # (B, 64)
-        tf_input = self.relu(self.fct2(tf_input))  # (B, 64)
-        tf_input = self.relu(self.fct3(tf_input))  # (B, 64)
-        tf_input = self.tanh(self.fct4(tf_input))  # (B, 24)
-        tf_output = transform_frame_function(tf_input, wo, v1, v2, v3, v4)  # (B, 60)
-        x = torch.cat([latent, tf_output], dim=-1)  # (B, 68)
+        tf_input = self.relu(self.fct1(latent))  # (B, 128)
+        tf_input = self.relu(self.fct2(tf_input))  # (B, 128)
+        tf_input = self.relu(self.fct3(tf_input))  # (B, 128)
+        tf_input = self.tanh(self.fct4(tf_input))  # (B, 60)
+        tf_output = transform_frame_function(tf_input, wo, v1, v2, v3, v4)  # (B, 30)
+        x = torch.cat([latent, tf_output], dim=-1)  # (B, 38)
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
@@ -628,21 +650,43 @@ def train_second_phase(
         v4 = v4.to(device)
         D = D.to(device)
 
-        latent = latent_texture
-
-        pred = decoder(
-            latent,
-            wo,
-            F.normalize(v1, p=2, dim=-1),
-            F.normalize(v2, p=2, dim=-1),
-            F.normalize(v3, p=2, dim=-1),
-            F.normalize(v4, p=2, dim=-1),
-        )
-        pred_log = log1p4(pred)
-        loss = loss_fn(pred_log, D)
+        batch_size = wo.shape[0] // 16
 
         optimizer.zero_grad()
-        loss.backward()
+        loss = 0.0
+
+        for i in range(16):
+            start = i * batch_size
+            end = (i + 1) * batch_size if i < 15 else wo.shape[0]
+            latent_batch = latent_texture[start:end]
+            wo_batch = wo[start:end]
+            v1_batch = v1[start:end]
+            v2_batch = v2[start:end]
+            v3_batch = v3[start:end]
+            v4_batch = v4[start:end]
+            D_batch = D[start:end]
+
+            # Normalize vectors
+            wo_batch = F.normalize(wo_batch, p=2, dim=-1)
+            v1_batch = F.normalize(v1_batch, p=2, dim=-1)
+            v2_batch = F.normalize(v2_batch, p=2, dim=-1)
+            v3_batch = F.normalize(v3_batch, p=2, dim=-1)
+            v4_batch = F.normalize(v4_batch, p=2, dim=-1)
+
+            pred = decoder(
+                latent_batch,
+                wo_batch,
+                v1_batch,
+                v2_batch,
+                v3_batch,
+                v4_batch,
+            )
+            pred_log = log1p4(pred)
+            loss_batch = loss_fn(pred_log, D_batch)
+            loss_batch.backward()
+
+            loss += loss_batch.item()
+
         optimizer.step()
         scheduler.step()
 
@@ -651,7 +695,7 @@ def train_second_phase(
             wandb.log(
                 {
                     "step": step,
-                    "2nd phase/loss": loss.item(),
+                    "2nd phase/loss": loss,
                 }
             )
 
@@ -772,7 +816,7 @@ def train(steps):
         num_steps=steps // 10,
         lr=lr_second,
         log_interval=100,
-        save_interval=steps // 100,
+        save_interval=steps // 10,
         device="cuda",
     )
 
