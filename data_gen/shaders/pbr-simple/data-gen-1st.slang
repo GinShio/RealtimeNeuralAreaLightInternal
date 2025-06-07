@@ -185,7 +185,7 @@ func computeDistribution(
     ->float3
 {
     // ────────────────────────────────────────────────────────────────
-    const uint ITERATIONS = 2048; // 各手法で 2048 サンプル
+    const uint ITERATIONS = 1024; // 各手法で 1024 サンプル
     // ────────────────────────────────────────────────────────────────
     let mipLevelFloor = floor(mipLevel);
 

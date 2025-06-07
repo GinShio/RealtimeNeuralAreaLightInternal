@@ -135,7 +135,7 @@ func computeDistribution(
     v4: float3)
     ->float3
 {
-    const uint ITERATIONS = 2048;
+    const uint ITERATIONS = 1024;
 
     let N = normalize(normal);
 
