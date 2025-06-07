@@ -16,94 +16,94 @@ import wandb
 torch.set_float32_matmul_precision("high")
 
 
-# class RoughnessClippedDataset:
-#     def __init__(self, base_dir, num_steps):
-#         self.base_dir = base_dir
-#         self.num_steps = num_steps
+class RoughnessClippedDataset:
+    def __init__(self, base_dir, num_steps):
+        self.base_dir = base_dir
+        self.num_steps = num_steps
 
-#         with open(os.path.join(base_dir, "data_gen_config.json"), "r") as f:
-#             self.config = json.load(f)
+        with open(os.path.join(base_dir, "data_gen_config.json"), "r") as f:
+            self.config = json.load(f)
 
-#         self.batch_size = self.config["batch_size"]
-#         self.first_phase_shard_size = self.config["first_phase_shard_size"]
-#         self.roughness_clipped_count = self.config["roughness_clipping_shard_count"]
+        self.batch_size = self.config["batch_size"]
+        self.first_phase_shard_size = self.config["first_phase_shard_size"]
+        self.roughness_clipped_count = self.config["roughness_clipping_shard_count"]
 
-#         self.files = [
-#             os.path.join(base_dir, f"first_phase_data-roughness-clipped.shard-{i}.bin")
-#             for i in range(self.roughness_clipped_count)
-#         ]
+        self.files = [
+            os.path.join(base_dir, f"first_phase_data-roughness-clipped.shard-{i}.bin")
+            for i in range(self.roughness_clipped_count)
+        ]
 
-#         self.total_samples = num_steps * self.batch_size
-#         self.sample_limit_per_shard = self.total_samples // self.roughness_clipped_count
+        self.total_samples = num_steps * self.batch_size
+        self.sample_limit_per_shard = self.total_samples // self.roughness_clipped_count
 
-#         self.shard_index = 0
-#         self.sample_index = 0
-#         self.sample_count = 0
-#         self.current_shard = None
-#         self.next_shard = None
-#         self.prefetch_thread = None
-#         self.sample_count = 0
+        self.shard_index = 0
+        self.sample_index = 0
+        self.sample_count = 0
+        self.current_shard = None
+        self.next_shard = None
+        self.prefetch_thread = None
+        self.sample_count = 0
 
-#     def __iter__(self):
-#         self.shard_index = 0
-#         self.sample_index = 0
-#         self.sample_count = 0
-#         self._load_next_shard()
-#         return self
+    def __iter__(self):
+        self.shard_index = 0
+        self.sample_index = 0
+        self.sample_count = 0
+        self._load_next_shard()
+        return self
 
-#     def _start_prefetch(self):
-#         if self.shard_index < len(self.files):
-#             path = self.files[self.shard_index]
-#             def load():
-#                 self.next_shard = np.fromfile(path, dtype=np.float16).reshape(-1, 26)
-#             self.prefetch_thread = threading.Thread(target=load)
-#             self.prefetch_thread.start()
+    def _start_prefetch(self):
+        if self.shard_index < len(self.files):
+            path = self.files[self.shard_index]
+            def load():
+                self.next_shard = np.fromfile(path, dtype=np.float16).reshape(-1, 26)
+            self.prefetch_thread = threading.Thread(target=load)
+            self.prefetch_thread.start()
 
-#     def _load_next_shard(self):
-#         if self.prefetch_thread is not None:
-#             self.prefetch_thread.join()
-#             self.current_shard = self.next_shard
-#             self.next_shard = None
-#             self.prefetch_thread = None
-#         else:
-#             if self.shard_index >= len(self.files):
-#                 self.current_shard = None
-#                 return
-#             path = self.files[self.shard_index]
-#             self.current_shard = np.fromfile(path, dtype=np.float16).reshape(-1, 26)
+    def _load_next_shard(self):
+        if self.prefetch_thread is not None:
+            self.prefetch_thread.join()
+            self.current_shard = self.next_shard
+            self.next_shard = None
+            self.prefetch_thread = None
+        else:
+            if self.shard_index >= len(self.files):
+                self.current_shard = None
+                return
+            path = self.files[self.shard_index]
+            self.current_shard = np.fromfile(path, dtype=np.float16).reshape(-1, 26)
 
-#         self.sample_index = 0
-#         self.sample_count = 0
-#         self.shard_index += 1
-#         self._start_prefetch()
+        self.sample_index = 0
+        self.sample_count = 0
+        self.shard_index += 1
+        self._start_prefetch()
 
-#     def __next__(self):
-#         if self.current_shard is None:
-#             raise StopIteration
+    def __next__(self):
+        if self.current_shard is None:
+            raise StopIteration
 
-#         if self.sample_count >= self.sample_limit_per_shard:
-#             self._load_next_shard()
-#             if self.current_shard is None:
-#                 raise StopIteration
+        if self.sample_count >= self.sample_limit_per_shard:
+            self._load_next_shard()
+            if self.current_shard is None:
+                raise StopIteration
 
-#         if self.sample_index + self.batch_size > len(self.current_shard):
-#             self.sample_index = 0
+        if self.sample_index + self.batch_size > len(self.current_shard):
+            self.sample_index = 0
 
-#         batch = self.current_shard[
-#             self.sample_index : self.sample_index + self.batch_size
-#         ]
-#         self.sample_index += self.batch_size
-#         self.sample_count += self.batch_size
+        batch = self.current_shard[
+            self.sample_index : self.sample_index + self.batch_size
+        ]
+        self.sample_index += self.batch_size
+        self.sample_count += self.batch_size
 
-#         material = torch.tensor(batch[:, 0:8], dtype=torch.float32)
-#         wo = torch.tensor(batch[:, 8:11], dtype=torch.float32)
-#         v1 = torch.tensor(batch[:, 11:14], dtype=torch.float32)
-#         v2 = torch.tensor(batch[:, 14:17], dtype=torch.float32)
-#         v3 = torch.tensor(batch[:, 17:20], dtype=torch.float32)
-#         v4 = torch.tensor(batch[:, 20:23], dtype=torch.float32)
-#         D = torch.tensor(batch[:, 23:26], dtype=torch.float32)
+        material = torch.tensor(batch[:, 0:8], dtype=torch.float32)
+        wo = torch.tensor(batch[:, 8:11], dtype=torch.float32)
+        v1 = torch.tensor(batch[:, 11:14], dtype=torch.float32)
+        v2 = torch.tensor(batch[:, 14:17], dtype=torch.float32)
+        v3 = torch.tensor(batch[:, 17:20], dtype=torch.float32)
+        v4 = torch.tensor(batch[:, 20:23], dtype=torch.float32)
+        D = torch.tensor(batch[:, 23:26], dtype=torch.float32)
 
-#         return material, wo, v1, v2, v3, v4, D
+        return material, wo, v1, v2, v3, v4, D
 
 
 class NormalDataset:
@@ -437,10 +437,10 @@ def train_first_phase(
     )
     loss_fn = nn.L1Loss()
 
-    # roughness_clipped_data = RoughnessClippedDataset(data_dir, num_steps=num_steps // 5)
+    roughness_clipped_data = RoughnessClippedDataset(data_dir, num_steps=num_steps * 4 // 5)
     normal_data = NormalDataset(data_dir)
 
-    data = iter(normal_data)
+    data = iter(roughness_clipped_data)
 
     for step in tqdm(range(num_steps), desc="First Phase Training"):
         try:

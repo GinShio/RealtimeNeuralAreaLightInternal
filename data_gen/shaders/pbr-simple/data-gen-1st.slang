@@ -147,7 +147,7 @@ func sampleMipLevel(u: float, mipCount: int)->float
 
 func roughnessClipping(roughness: float)->float
 {
-    let clipValue = 0.1 * pc.roughnessClippingScale;
+    let clipValue = 0.05 * pc.roughnessClippingScale;
     return max(roughness, clipValue);
 }
 
@@ -211,11 +211,10 @@ func computeDistribution(
 
         let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uvM, mipLevelFloor).rgb);
         var roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
-        roughness *= 0.1;
         // let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
         // var roughness = 0.01;
         let metallic = 1.0;
-        // roughness = roughnessClipping(roughness);
+        roughness = roughnessClipping(roughness);
 
         var normalTex = normalSampler.SampleLevel(uvM, mipLevelFloor).xyz;
         normalTex.y = 1.0 - normalTex.y; // Y 反転
