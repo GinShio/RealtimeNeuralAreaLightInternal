@@ -1,6 +1,6 @@
 import "../rtxns/PCG32";
 
-static const float CLIP_Z = 0.0001;
+static const float CLIP_Z = 0.0;
 
 func intersectZPlane(float3 a, float3 b)->float3
 {
