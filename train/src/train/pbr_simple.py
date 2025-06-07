@@ -735,8 +735,8 @@ def train(steps):
     data_dir = "data/pbr-simple"
     output_dir = "output/pbr-simple"
 
-    lr_first = 1e-3
-    lr_second = 1e-3
+    lr_first = 1e-4
+    lr_second = 1e-5
 
     config = {
         "steps": steps,

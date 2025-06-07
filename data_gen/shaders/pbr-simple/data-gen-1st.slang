@@ -185,7 +185,7 @@ func computeDistribution(
     ->float3
 {
     // ────────────────────────────────────────────────────────────────
-    const uint ITERATIONS = 1024; // 各手法で 1024 サンプル
+    const uint ITERATIONS = 2048; // 各手法で 2048 サンプル
     // ────────────────────────────────────────────────────────────────
     let mipLevelFloor = floor(mipLevel);
 
@@ -211,9 +211,9 @@ func computeDistribution(
 
         let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uvM, mipLevelFloor).rgb);
         var roughness = roughnessSampler.SampleLevel(uvM, mipLevelFloor).r;
-        // let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
+        let metallic = metallicSampler.SampleLevel(uvM, mipLevelFloor).r;
         // var roughness = 0.01;
-        let metallic = 1.0;
+        // let metallic = 1.0;
         roughness = roughnessClipping(roughness);
 
         var normalTex = normalSampler.SampleLevel(uvM, mipLevelFloor).xyz;
@@ -318,10 +318,10 @@ void main(uint3 tid: SV_DispatchThreadID)
     // sample parameters
     let baseColor = srgbToLinear(baseColorSampler.SampleLevel(uv, mipLevel).rgb);
     var roughness = roughnessSampler.SampleLevel(uv, mipLevel).r;
-    roughness *= 0.1;
-    // let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    let metallic = metallicSampler.SampleLevel(uv, mipLevel).r;
+    // roughness *= 0.1;
     // let roughness = 0.01;
-    let metallic = 1.0;
+    // let metallic = 1.0;
     var normal = normalSampler.SampleLevel(uv, mipLevel).xyz;
     normal.y = 1.0 - normal.y; // Flip Y coordinate for normal map
     normal = normalize(normal * 2.0 - 1.0);
