@@ -419,11 +419,8 @@ def save_model_as_json(model, path):
         json.dump(model_json, f, indent=2)
 
 
-def log1p4(x):
-    x = torch.log1p(x)
-    x = torch.log1p(x)
-    x = torch.log1p(x)
-    x = torch.log1p(x)
+def log1pScale(x):
+    x = torch.log1p(x * 0.5)
     return x
 
 
@@ -469,7 +466,7 @@ def train_first_phase(
             F.normalize(v3, p=2, dim=-1),
             F.normalize(v4, p=2, dim=-1),
         )
-        pred_log = log1p4(pred)
+        pred_log = log1pScale(pred)
         loss = loss_fn(pred_log, D)
 
         optimizer.zero_grad()
@@ -638,7 +635,7 @@ def train_second_phase(
             F.normalize(v3, p=2, dim=-1),
             F.normalize(v4, p=2, dim=-1),
         )
-        pred_log = log1p4(pred)
+        pred_log = log1pScale(pred)
         loss = loss_fn(pred_log, D)
 
         optimizer.zero_grad()

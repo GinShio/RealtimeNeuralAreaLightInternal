@@ -230,13 +230,10 @@ func computeDistribution(
     return D;
 }
 
-func log1p4(x: float)->float
+func log1pScale(x: float)->float
 {
     var ret = x;
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
-    ret = log(1.0 + ret);
+    ret = log(1.0 + ret * 0.5);
     return ret;
 }
 
@@ -300,7 +297,7 @@ void main(uint3 tid: SV_DispatchThreadID)
     data[index + 12] = half(v4.x);
     data[index + 13] = half(v4.y);
     data[index + 14] = half(v4.z);
-    data[index + 15] = half(log1p4(D.x));
-    data[index + 16] = half(log1p4(D.y));
-    data[index + 17] = half(log1p4(D.z));
+    data[index + 15] = half(log1pScale(D.x));
+    data[index + 16] = half(log1pScale(D.y));
+    data[index + 17] = half(log1pScale(D.z));
 }
