@@ -13,6 +13,14 @@ cargo run --release
 
 ![screenshot](./screenshot.jpg)
 
+![screenshot](./screenshot1.jpg)
+
+![screenshot](./screenshot2.jpg)
+
+![screenshot](./screenshot3.jpg)
+
+![screenshot](./screenshot4.jpg)
+
 https://x.com/MatchaChoco010/status/1930599606209114140
 
 https://x.com/MatchaChoco010/status/1930599611301044677
