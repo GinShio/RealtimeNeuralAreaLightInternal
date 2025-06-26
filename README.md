@@ -11,6 +11,8 @@ cargo run --release
 リアルタイム面光源にCoopVecを使うのを作ろうと思って頓挫したもの。
 またタイミングを見て再開するかもしれない。
 
+![screenshot](./screenshot.jpg)
+
 https://x.com/MatchaChoco010/status/1930599606209114140
 
 https://x.com/MatchaChoco010/status/1930599611301044677
