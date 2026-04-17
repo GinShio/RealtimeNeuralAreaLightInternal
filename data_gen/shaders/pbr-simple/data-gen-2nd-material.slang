@@ -10,7 +10,7 @@ import "../rtxns/Utils";
 
 import "brdf";
 
-const float PI = 3.14159265358979323846;
+static const float PI = 3.14159265358979323846;
 
 struct UniformBuffer
 {

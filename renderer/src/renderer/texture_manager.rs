@@ -7,6 +7,7 @@ use gpu_allocator::MemoryLocation;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme};
 
 use crate::renderer::vulkan_state::VulkanState;
+use ash::vk::TaggedStructure;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -74,7 +75,7 @@ impl TextureManager {
             let create_info = vk::DescriptorSetLayoutCreateInfo::default()
                 .bindings(&bindings)
                 .flags(vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL)
-                .push_next(&mut extended_info);
+                .push(&mut extended_info);
             unsafe {
                 state
                     .device
@@ -102,7 +103,7 @@ impl TextureManager {
             let allocate_info = vk::DescriptorSetAllocateInfo::default()
                 .descriptor_pool(texture_descriptor_pool)
                 .set_layouts(&set_layouts)
-                .push_next(&mut count_info);
+                .push(&mut count_info);
             let descriptor_sets = unsafe { state.device.allocate_descriptor_sets(&allocate_info)? };
             descriptor_sets[0]
         };
@@ -122,7 +123,7 @@ impl TextureManager {
             let create_info = vk::DescriptorSetLayoutCreateInfo::default()
                 .bindings(&bindings)
                 .flags(vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL)
-                .push_next(&mut extended_info);
+                .push(&mut extended_info);
             unsafe {
                 state
                     .device
@@ -150,7 +151,7 @@ impl TextureManager {
             let allocate_info = vk::DescriptorSetAllocateInfo::default()
                 .descriptor_pool(sampler_descriptor_pool)
                 .set_layouts(&set_layouts)
-                .push_next(&mut count_info);
+                .push(&mut count_info);
             let descriptor_sets = unsafe { state.device.allocate_descriptor_sets(&allocate_info)? };
             descriptor_sets[0]
         };

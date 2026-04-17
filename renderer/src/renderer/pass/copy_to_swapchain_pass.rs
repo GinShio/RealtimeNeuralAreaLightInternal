@@ -4,6 +4,7 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::renderer::{Renderer, render_images::RenderImages, vulkan_state::VulkanState};
+use ash::vk::TaggedStructure;
 
 /// A struct that represents the copy to swapchain pass.
 pub struct CopyToSwapchainPass {
@@ -195,7 +196,7 @@ impl CopyToSwapchainPass {
                 .multisample_state(&multisample_state)
                 .color_blend_state(&color_blend_state)
                 .dynamic_state(&dynamic_state)
-                .push_next(&mut pipeline_rendering)
+                .push(&mut pipeline_rendering)
                 .layout(pipeline_layout);
             let pipeline = unsafe {
                 state

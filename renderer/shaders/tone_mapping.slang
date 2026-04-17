@@ -36,7 +36,7 @@ func main(input: ComputeInput)->void
         return;
     }
 
-    let input = inputTexture.Load( { xy, 0 }).rgb;
+    let input = inputTexture.Load( int3(xy, 0) ).rgb;
     let color = reinhardToneMapping(input);
     let srgbColor = linearToSRGB(color);
     outputTexture[xy] = { srgbColor, 1.0 };

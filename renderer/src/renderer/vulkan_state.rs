@@ -13,11 +13,13 @@ use ash::{
 };
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use winit::{
+    event_loop::ActiveEventLoop,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     window::Window,
 };
 
 use crate::renderer::Renderer;
+use ash::vk::TaggedStructure;
 
 extern "system" fn vulkan_debug_utils_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -83,7 +85,7 @@ pub struct VulkanState {
 }
 impl VulkanState {
     /// Creates a new VulkanState instance.
-    pub fn new(window: &Window) -> Result<Self> {
+    pub fn new(window: &Window, event_loop: &ActiveEventLoop) -> Result<Self> {
         // Load Vulkan library from the system
         let entry = unsafe { Entry::load()? };
 
@@ -144,28 +146,29 @@ impl VulkanState {
                 .application_info(&app_info)
                 .enabled_extension_names(&enabled_extensions)
                 .enabled_layer_names(&enabled_layers)
-                .push_next(&mut debug_utils_messenger_create_info);
+                .push(&mut debug_utils_messenger_create_info);
             unsafe { entry.create_instance(&create_info, None)? }
         };
 
         // Create debug utils messenger
         #[cfg(feature = "validation-enabled")]
-        let debug_fn = debug_utils::Instance::new(&entry, &instance);
+        let debug_fn = debug_utils::Instance::load(&entry, &instance);
         #[cfg(feature = "validation-enabled")]
         let debug_utils_messenger = unsafe {
             debug_fn.create_debug_utils_messenger(&debug_utils_messenger_create_info, None)?
         };
 
         // Create surface
-        let surface_fn = surface::Instance::new(&entry, &instance);
-        let surface = unsafe {
-            ash_window::create_surface(
+        let surface_fn = surface::Instance::load(&entry, &instance);
+        let surface_factory = ash_window::SurfaceFactory::new(
                 &entry,
                 &instance,
-                window.display_handle()?.as_raw(),
-                window.window_handle()?.as_raw(),
-                None,
-            )?
+                event_loop.display_handle()?.as_raw(),
+            )
+            .unwrap();
+        let surface = unsafe {
+            surface_factory
+            .create_surface(window.window_handle()?.as_raw(), None)?
         };
 
         // Select physical device
@@ -211,7 +214,7 @@ impl VulkanState {
                 let mut descriptor_indexing_features =
                     vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default();
                 let mut features2 = vk::PhysicalDeviceFeatures2::default()
-                    .push_next(&mut descriptor_indexing_features);
+                    .push(&mut descriptor_indexing_features);
                 unsafe { instance.get_physical_device_features2(device, &mut features2) };
                 let support_bindless_textures = descriptor_indexing_features
                     .shader_sampled_image_array_non_uniform_indexing
@@ -235,22 +238,22 @@ impl VulkanState {
                 // Check if support required extensions
                 let support_cooperative_extension = extension_props.iter().any(|ext| {
                     let ext_name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
-                    ext_name == cooperative_vector::NV_COOPERATIVE_VECTOR_NAME
+                    ext_name == vk::NV_COOPERATIVE_VECTOR_NAME
                 });
                 let support_shader_replicated_extension = extension_props.iter().any(|ext| {
                     let ext_name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
-                    ext_name == shader_replicated_composites::EXT_SHADER_REPLICATED_COMPOSITES_NAME
+                    ext_name == vk::EXT_SHADER_REPLICATED_COMPOSITES_NAME
                 });
                 let support_extensions = support_cooperative_extension
                     && support_shader_replicated_extension;
 
                 // Check if support required features
                 let mut cooperative_features =
-                    cooperative_vector::PhysicalDeviceCooperativeVectorFeaturesNV::default();
+                    vk::PhysicalDeviceCooperativeVectorFeaturesNV::default();
                     let mut replicated_composites_features =
-                        shader_replicated_composites::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default();
+                        vk::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default();
                 let mut features2 =
-                    vk::PhysicalDeviceFeatures2::default().push_next(&mut cooperative_features).push_next(&mut replicated_composites_features);
+                    vk::PhysicalDeviceFeatures2::default().push(&mut cooperative_features).push(&mut replicated_composites_features);
                 unsafe {
                     instance.get_physical_device_features2(device, &mut features2);
                 }
@@ -290,14 +293,15 @@ impl VulkanState {
             // - cooperative_vector
             // - shader_replicated_composites
             let mut vulkan_11_features =
-                vk::PhysicalDeviceVulkan11Features::default().storage_buffer16_bit_access(true);
+                vk::PhysicalDeviceVulkan11Features::default().storage_buffer16_bit_access(true).uniform_and_storage_buffer16_bit_access(true);
             let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::default()
                 .shader_float16(true)
                 .shader_sampled_image_array_non_uniform_indexing(true)
                 .descriptor_binding_sampled_image_update_after_bind(true)
                 .descriptor_binding_variable_descriptor_count(true)
                 .descriptor_binding_partially_bound(true)
-                .runtime_descriptor_array(true);
+                .runtime_descriptor_array(true)
+                .vulkan_memory_model(true);
             let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::default()
                 .synchronization2(true)
                 .dynamic_rendering(true);
@@ -305,23 +309,15 @@ impl VulkanState {
                 vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT::default()
                     .extended_dynamic_state(true);
             let mut replicated_composites_features =
-                shader_replicated_composites::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default()
+                vk::PhysicalDeviceShaderReplicatedCompositesFeaturesEXT::default()
                     .shader_replicated_composites(true);
             let mut cooperative_vector_features =
-                cooperative_vector::PhysicalDeviceCooperativeVectorFeaturesNV::default()
+                vk::PhysicalDeviceCooperativeVectorFeaturesNV::default()
                     .cooperative_vector(true);
-            let mut enabled_features = vk::PhysicalDeviceFeatures2::default()
-                .push_next(&mut vulkan_11_features)
-                .push_next(&mut vulkan_12_features)
-                .push_next(&mut vulkan_13_features)
-                .push_next(&mut extended_dynamic_state)
-                .push_next(&mut replicated_composites_features)
-                .push_next(&mut cooperative_vector_features);
-
             let enabled_extension_names = [
                 vk::KHR_SWAPCHAIN_NAME.as_ptr(),
-                cooperative_vector::NV_COOPERATIVE_VECTOR_NAME.as_ptr(),
-                shader_replicated_composites::EXT_SHADER_REPLICATED_COMPOSITES_NAME.as_ptr(),
+                vk::NV_COOPERATIVE_VECTOR_NAME.as_ptr(),
+                vk::EXT_SHADER_REPLICATED_COMPOSITES_NAME.as_ptr(),
             ];
 
             let queue_create_infos = vec![
@@ -332,7 +328,13 @@ impl VulkanState {
             let create_info = vk::DeviceCreateInfo::default()
                 .queue_create_infos(&queue_create_infos)
                 .enabled_extension_names(&enabled_extension_names)
-                .push_next(&mut enabled_features);
+                .push(&mut vulkan_11_features)
+                .push(&mut vulkan_12_features)
+                .push(&mut vulkan_13_features)
+                .push(&mut extended_dynamic_state)
+                .push(&mut replicated_composites_features)
+                .push(&mut cooperative_vector_features);
+                ;
 
             unsafe { instance.create_device(physical_device, &create_info, None)? }
         };
@@ -341,7 +343,7 @@ impl VulkanState {
         let queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
 
         // Create swapchain
-        let swapchain_fn = ash::khr::swapchain::Device::new(&instance, &device);
+        let swapchain_fn = ash::khr::swapchain::Device::load(&instance, &device);
         let swapchain = {
             let format = vk::Format::B8G8R8A8_UNORM;
             let present_mode = vk::PresentModeKHR::FIFO;
@@ -405,7 +407,7 @@ impl VulkanState {
         };
 
         // Create cooperative vector device
-        let cooperative_vector_fn = cooperative_vector::Device::new(&instance, &device);
+        let cooperative_vector_fn = cooperative_vector::Device::load(&instance, &device);
 
         // Create command pool
         let command_pool = {

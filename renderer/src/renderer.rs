@@ -3,7 +3,10 @@ use std::time::Instant;
 use anyhow::Result;
 use ash::vk;
 use imgui::{Context, DrawData, Ui};
-use winit::window::Window;
+use winit::{
+    event_loop::ActiveEventLoop,
+    window::Window,
+};
 
 mod model_data;
 mod network;
@@ -52,8 +55,8 @@ impl Renderer {
     const IMAGE_COUNT: usize = Self::MAX_FRAMES_IN_FLIGHT + 1;
 
     /// Creates a new instance of the Renderer struct.
-    pub fn new(window: &Window, imgui: &mut Context) -> Result<Self> {
-        let mut state = VulkanState::new(window)?;
+    pub fn new(window: &Window, event_loop: &ActiveEventLoop, imgui: &mut Context) -> Result<Self> {
+        let mut state = VulkanState::new(window, event_loop)?;
 
         // Create render images
         let render_images = render_images::RenderImages::new(&mut state)?;

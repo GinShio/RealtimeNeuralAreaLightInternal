@@ -7,6 +7,8 @@ use ash::ext::debug_utils;
 use ash::{Device, Entry, Instance, vk};
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 
+use ash::vk::TaggedStructure;
+
 extern "system" fn vulkan_debug_utils_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -107,13 +109,13 @@ impl VulkanState {
                 .application_info(&app_info)
                 .enabled_extension_names(&required_extensions)
                 .enabled_layer_names(&enabled_layers)
-                .push_next(&mut debug_utils_messenger_create_info);
+                .push(&mut debug_utils_messenger_create_info);
             unsafe { entry.create_instance(&create_info, None)? }
         };
 
         // Create debug utils messenger
         #[cfg(feature = "validation-enabled")]
-        let debug_fn = debug_utils::Instance::new(&entry, &instance);
+        let debug_fn = debug_utils::Instance::load(&entry, &instance);
         #[cfg(feature = "validation-enabled")]
         let debug_utils_messenger = unsafe {
             debug_fn.create_debug_utils_messenger(&debug_utils_messenger_create_info, None)?
@@ -147,7 +149,7 @@ impl VulkanState {
                 let mut descriptor_indexing_features =
                     vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default();
                 let mut features2 = vk::PhysicalDeviceFeatures2::default()
-                    .push_next(&mut descriptor_indexing_features);
+                    .push(&mut descriptor_indexing_features);
                 unsafe { instance.get_physical_device_features2(device, &mut features2) };
                 let support_bindless_textures = descriptor_indexing_features
                     .shader_sampled_image_array_non_uniform_indexing
@@ -213,10 +215,10 @@ impl VulkanState {
                     .extended_dynamic_state(true);
             let mut enabled_features = vk::PhysicalDeviceFeatures2::default()
                 .features(vulkan_features)
-                .push_next(&mut vulkan_11_features)
-                .push_next(&mut vulkan_12_features)
-                .push_next(&mut vulkan_13_features)
-                .push_next(&mut extended_dynamic_state);
+                .push(&mut vulkan_11_features)
+                .push(&mut vulkan_12_features)
+                .push(&mut vulkan_13_features)
+                .push(&mut extended_dynamic_state);
 
             let enabled_extension_names = [
                 vk::KHR_16BIT_STORAGE_NAME.as_ptr(),
@@ -231,7 +233,7 @@ impl VulkanState {
             let create_info = vk::DeviceCreateInfo::default()
                 .queue_create_infos(&queue_create_infos)
                 .enabled_extension_names(&enabled_extension_names)
-                .push_next(&mut enabled_features);
+                .push(&mut enabled_features);
 
             unsafe { instance.create_device(physical_device, &create_info, None)? }
         };

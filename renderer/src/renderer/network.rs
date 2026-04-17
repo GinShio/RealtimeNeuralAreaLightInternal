@@ -25,27 +25,27 @@ impl Network {
         cols: u32,
     ) -> Result<u32> {
         let mut required_size = 0;
-        let stride = cols as u64 * std::mem::size_of::<f16>() as u64;
+        let stride = cols as usize * std::mem::size_of::<f16>();
 
-        let info = cooperative_vector::ConvertCooperativeVectorMatrixInfoNV::default()
+        let info = vk::ConvertCooperativeVectorMatrixInfoNV::default()
             .num_rows(rows)
             .num_columns(cols)
             .src_component_type(vk::ComponentTypeNV::FLOAT16)
-            .src_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::RowMajor)
+            .src_layout(vk::CooperativeVectorMatrixLayoutNV::ROW_MAJOR)
             .src_stride(stride)
             .src_size(0)
             .src_data(vk::DeviceOrHostAddressConstKHR {
                 host_address: std::ptr::null(),
             })
             .dst_component_type(vk::ComponentTypeNV::FLOAT16)
-            .dst_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::InferencingOptimal)
+            .dst_layout(vk::CooperativeVectorMatrixLayoutNV::INFERENCING_OPTIMAL)
             .dst_stride(stride)
             .dst_size(&mut required_size)
             .dst_data(vk::DeviceOrHostAddressKHR {
                 host_address: std::ptr::null_mut(),
             });
         unsafe {
-            cooperative_vector_fn.convert_cooperative_vector_matrix_nv(&info)?;
+            cooperative_vector_fn.convert_cooperative_vector_matrix(&info)?;
         }
         Ok(required_size as u32)
     }
@@ -66,30 +66,30 @@ impl Network {
             src_data_f16[i] = f16::from_f32(value);
         }
 
-        let src_stride = cols as u64 * std::mem::size_of::<f16>() as u64;
-        let dst_stride = rows as u64 * std::mem::size_of::<f16>() as u64;
+        let src_stride = cols as usize * std::mem::size_of::<f16>();
+        let dst_stride = rows as usize * std::mem::size_of::<f16>();
 
         let mut actual_size = required_size;
 
-        let info = cooperative_vector::ConvertCooperativeVectorMatrixInfoNV::default()
+        let info = vk::ConvertCooperativeVectorMatrixInfoNV::default()
             .num_rows(rows)
             .num_columns(cols)
             .src_component_type(vk::ComponentTypeNV::FLOAT16)
-            .src_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::RowMajor)
+            .src_layout(vk::CooperativeVectorMatrixLayoutNV::ROW_MAJOR)
             .src_stride(src_stride)
             .src_size(size)
             .src_data(vk::DeviceOrHostAddressConstKHR {
                 host_address: src_data_f16.as_ptr() as *const _,
             })
             .dst_component_type(vk::ComponentTypeNV::FLOAT16)
-            .dst_layout(cooperative_vector::CooperativeVectorMatrixLayoutNV::InferencingOptimal)
+            .dst_layout(vk::CooperativeVectorMatrixLayoutNV::INFERENCING_OPTIMAL)
             .dst_stride(dst_stride)
             .dst_size(&mut actual_size)
             .dst_data(vk::DeviceOrHostAddressKHR {
                 host_address: result.as_mut_ptr() as *mut _,
             });
         unsafe {
-            cooperative_vector_fn.convert_cooperative_vector_matrix_nv(&info)?;
+            cooperative_vector_fn.convert_cooperative_vector_matrix(&info)?;
         }
 
         Ok(result)

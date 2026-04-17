@@ -4,6 +4,7 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::renderer::{texture_manager::TextureManager, vertex::Vertex, vulkan_state::VulkanState};
+use ash::vk::TaggedStructure;
 
 pub fn create_graphics_pipeline(
     state: &mut VulkanState,
@@ -108,7 +109,7 @@ pub fn create_graphics_pipeline(
     let rendering_formats = [vk::Format::R32G32B32A32_SFLOAT];
     let mut pipeline_rendering = vk::PipelineRenderingCreateInfo::default()
         .color_attachment_formats(&rendering_formats)
-        .depth_attachment_format(vk::Format::D24_UNORM_S8_UINT);
+        .depth_attachment_format(vk::Format::D16_UNORM_S8_UINT);
 
     // Create pipeline layout
     let mut set_layouts = vec![];
@@ -136,7 +137,7 @@ pub fn create_graphics_pipeline(
         .color_blend_state(&color_blend_state)
         .depth_stencil_state(&depth_stencil_state)
         .dynamic_state(&dynamic_state)
-        .push_next(&mut pipeline_rendering)
+        .push(&mut pipeline_rendering)
         .layout(pipeline_layout);
     let pipeline = unsafe {
         state

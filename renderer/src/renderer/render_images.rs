@@ -167,7 +167,7 @@ impl RenderImages {
                 let image_create_info = vk::ImageCreateInfo::default()
                     .image_type(vk::ImageType::TYPE_2D)
                     .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
-                    .format(vk::Format::D24_UNORM_S8_UINT)
+                    .format(vk::Format::D16_UNORM_S8_UINT)
                     .mip_levels(1)
                     .array_layers(1)
                     .extent(vk::Extent3D {
@@ -204,7 +204,7 @@ impl RenderImages {
                 let image_view_create_info = vk::ImageViewCreateInfo::default()
                     .image(image)
                     .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(vk::Format::D24_UNORM_S8_UINT)
+                    .format(vk::Format::D16_UNORM_S8_UINT)
                     .subresource_range(vk::ImageSubresourceRange {
                         aspect_mask: vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL,
                         base_mip_level: 0,

@@ -59,7 +59,7 @@ impl ApplicationHandler for App {
         self.platform
             .attach_window(self.imgui.io_mut(), &window, HiDpiMode::Default);
         self.renderer =
-            Some(Renderer::new(&window, &mut self.imgui).expect("Failed to create renderer"));
+            Some(Renderer::new(&window, &event_loop, &mut self.imgui).expect("Failed to create renderer"));
         self.window = Some(window);
         self.window.as_ref().unwrap().request_redraw();
         self.latest_frame = Instant::now();

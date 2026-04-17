@@ -9,16 +9,16 @@ validation-enabled = []
 
 [dependencies]
 anyhow = "1.0.98"
-ash = "0.38.0"
-ash-window = "0.13.0"
+ash = { path = "../external/ash/ash" }
+ash-window = { path = "../external/ash/ash-window" }
 bytemuck = { version = "1.23.0", features = ["derive"] }
 exr = "1.73.0"
 glam = { version = "0.30.3", features = ["bytemuck"] }
 gltf = "1.4.1"
-gpu-allocator = "0.27.0"
+gpu-allocator = { path = "../external/gpu-allocator" }
 half = { version = "2.6.0", features = ["bytemuck"] }
 imgui = "0.12.0"
-imgui-rs-vulkan-renderer = { version = "1.16.0", features = [
+imgui-rs-vulkan-renderer = { path = "../external/imgui-rs-vulkan-renderer", features = [
   "dynamic-rendering",
   "gpu-allocator",
 ] }

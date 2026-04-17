@@ -7,7 +7,13 @@ version = "0.1.0"
 edition = "2024"
 
 [patch.crates-io.ash]
-path = "./ash/ash"
+path = "./external/ash/ash"
 
 [patch.crates-io.ash-window]
-path = "./ash/ash-window"
+path = "./external/ash/ash-window"
+
+[patch.crates-io.gpu-allocator]
+path = "./external/gpu-allocator"
+
+[patch.crates-io.imgui-rs-vulkan-renderer]
+path = "./external/imgui-rs-vulkan-renderer"
