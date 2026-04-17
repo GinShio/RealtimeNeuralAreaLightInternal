@@ -5,6 +5,7 @@
 
 use crate::{Options, RendererResult};
 use ash::{vk, Device};
+use ash::vk::TaggedStructure;
 pub(crate) use buffer::*;
 use std::{ffi::CString, mem};
 pub(crate) use texture::*;
@@ -201,7 +202,7 @@ pub(crate) fn create_vulkan_pipeline(
         rendering_info
     };
     #[cfg(feature = "dynamic-rendering")]
-    let pipeline_info = pipeline_info.push_next(&mut rendering_info);
+    let pipeline_info = pipeline_info.push(&mut rendering_info);
 
     let pipeline = unsafe {
         device

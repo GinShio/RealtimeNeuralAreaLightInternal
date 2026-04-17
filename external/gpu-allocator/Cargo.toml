@@ -28,7 +28,7 @@ thiserror = { version = "2.0", default-features = false }
 presser = { version = "0.3", default-features = false }
 # Only needed for Vulkan.  Disable all default features as good practice,
 # such as the ability to link/load a Vulkan library.
-ash = { version = "0.38", optional = true, default-features = false, features = ["debug"] }
+ash = { path = "../ash/ash", optional = true, default-features = false, features = ["debug"] }
 # Only needed for visualizer.
 egui = { version = ">=0.24, <=0.27", optional = true, default-features = false }
 egui_extras = { version = ">=0.24, <=0.27", optional = true, default-features = false }
@@ -59,7 +59,7 @@ optional = true
 
 [dev-dependencies]
 # Enable the "loaded" feature to be able to access the Vulkan entrypoint.
-ash = { version = "0.38", default-features = false, features = ["debug", "loaded"] }
+ash = { path = "../ash/ash", default-features = false, features = ["debug", "loaded"] }
 env_logger = "0.11"
 
 [target.'cfg(windows)'.dev-dependencies.windows]

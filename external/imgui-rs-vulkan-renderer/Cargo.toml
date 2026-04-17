@@ -17,10 +17,10 @@ include = ["/src", "LICENSE", "README.md", "CHANGELOG.md"]
 thiserror = "2.0"
 log = "0.4"
 imgui = "^0.12"
-ash = { version = "0.38", default-features = false, features = ["debug"] }
+ash = { path = "../ash/ash" }
 ultraviolet = "0.9"
 
-gpu-allocator = { version = "0.27", default-features = false, features = ["vulkan"], optional = true }
+gpu-allocator = { path = "../gpu-allocator", default-features = false, features = ["vulkan"], optional = true }
 
 vk-mem = { version = "0.4", optional = true }
 
@@ -32,7 +32,7 @@ simple_logger = "5.0"
 winit = "0.29"
 imgui = { version = "^0.12", features = ["tables-api"] }
 imgui-winit-support = "^0.12"
-ash = { version = "0.38", default-features = false, features = ["debug", "linked"] }
+ash = { path = "../ash/ash", default-features = false, features = ["debug", "linked"] }
 ash-window = "0.13"
 image = "0.25"
 imgui-rs-vulkan-renderer = { path = ".", features = ["gpu-allocator"] }
